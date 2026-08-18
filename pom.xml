@@ -11,6 +11,7 @@
     <modules>
         <module>debt-extractor</module>
         <module>debt-classifier</module>
+        <module>debt-tester</module>
     </modules>
 
     <properties>
