@@ -9,55 +9,61 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
-public class OpenAiProvider implements LlmProvider {
+public class GeminiProvider implements LlmProvider {
     private final LlmConfig config;
     private final HttpClient httpClient;
 
-    public OpenAiProvider(LlmConfig config) {
+    public GeminiProvider(LlmConfig config) {
         this.config = config;
         this.httpClient = HttpClient.newHttpClient();
     }
 
     @Override
     public String generateTest(String comment, String debtType, String methodSourceCode) throws Exception {
-        String url = config.getEndpoint().isEmpty() ? "https://api.openai.com/v1/chat/completions" : config.getEndpoint();
+        String baseUrl = config.getEndpoint().isEmpty() ? "https://generativelanguage.googleapis.com/v1beta" : config.getEndpoint();
+        String url = String.format("%s/models/%s:generateContent?key=%s", baseUrl, config.getModel(), config.getApiKey());
 
         JsonObject payload = new JsonObject();
-        payload.addProperty("model", config.getModel());
+        
+        // System instruction
+        JsonObject systemInstruction = new JsonObject();
+        JsonObject sysParts = new JsonObject();
+        sysParts.addProperty("text", "You are an expert Java test engineer. Your task is to analyze the provided Java method, self-admitted technical debt comment, and debt type, then generate a comprehensive JUnit test case to pay off the technical debt. Output only Java test code inside markdown code blocks.");
+        systemInstruction.add("parts", sysParts);
+        payload.add("system_instruction", systemInstruction);
 
-        JsonArray messages = new JsonArray();
-        JsonObject sysMsg = new JsonObject();
-        sysMsg.addProperty("role", "system");
-        sysMsg.addProperty(
-                "content", "You are an expert Java test engineer. Your task is to analyze the provided Java method, self-admitted technical debt comment, " +
-                        "and debt type, then generate a comprehensive JUnit test case to pay off the technical debt. Output only Java test code inside markdown code blocks."
-        );
-        messages.add(sysMsg);
-
-        JsonObject userMsg = new JsonObject();
-        userMsg.addProperty("role", "user");
-        userMsg.addProperty("content", String.format("Debt Type: %s\nComment: %s\nMethod Source Code:\n%s", debtType, comment, methodSourceCode));
-        messages.add(userMsg);
-
-        payload.add("messages", messages);
+        // Contents
+        JsonArray contents = new JsonArray();
+        JsonObject userContent = new JsonObject();
+        userContent.addProperty("role", "user");
+        
+        JsonArray parts = new JsonArray();
+        JsonObject part = new JsonObject();
+        part.addProperty("text", String.format("Debt Type: %s\nComment: %s\nMethod Source Code:\n%s", debtType, comment, methodSourceCode));
+        parts.add(part);
+        
+        userContent.add("parts", parts);
+        contents.add(userContent);
+        payload.add("contents", contents);
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Content-Type", "application/json")
-                .header("Authorization", "Bearer " + config.getApiKey())
                 .POST(HttpRequest.BodyPublishers.ofString(payload.toString()))
                 .build();
 
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() != 200) {
-            throw new RuntimeException("OpenAI API error: " + response.statusCode() + " - " + response.body());
+            throw new RuntimeException("Gemini API error: " + response.statusCode() + " - " + response.body());
         }
 
         JsonObject jsonResp = JsonParser.parseString(response.body()).getAsJsonObject();
-        String content = jsonResp.getAsJsonArray("choices")
+        String content = jsonResp.getAsJsonArray("candidates")
                 .get(0).getAsJsonObject()
-                .getAsJsonObject("message")
-                .get("content").getAsString();
+                .getAsJsonObject("content")
+                .getAsJsonArray("parts")
+                .get(0).getAsJsonObject()
+                .get("text").getAsString();
 
         return extractCodeBlock(content);
     }
