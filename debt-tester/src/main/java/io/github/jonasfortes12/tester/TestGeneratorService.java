@@ -43,6 +43,8 @@ public class TestGeneratorService {
         this.config = config;
         if (config.getProvider().equalsIgnoreCase("anthropic")) {
             this.provider = new AnthropicProvider(config);
+        } else if (config.getProvider().equalsIgnoreCase("gemini")) {
+            this.provider = new GeminiProvider(config);
         } else {
             this.provider = new OpenAiProvider(config);
         }
