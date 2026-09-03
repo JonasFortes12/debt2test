@@ -1,5 +1,7 @@
 package io.github.jonasfortes12.core.model;
 
+import static io.github.jonasfortes12.core.util.Validation.requireText;
+
 public record ExternalReference(String value, String source) {
 
     public ExternalReference {
@@ -7,9 +9,4 @@ public record ExternalReference(String value, String source) {
         requireText(source, "source");
     }
 
-    private static void requireText(String value, String field) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(field + " must not be blank");
-        }
-    }
 }

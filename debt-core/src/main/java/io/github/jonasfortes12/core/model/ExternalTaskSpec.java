@@ -1,5 +1,7 @@
 package io.github.jonasfortes12.core.model;
 
+import static io.github.jonasfortes12.core.util.Validation.requireText;
+
 import java.util.List;
 import java.util.Objects;
 
@@ -20,9 +22,4 @@ public record ExternalTaskSpec(
         labels = List.copyOf(Objects.requireNonNull(labels, "labels must not be null"));
     }
 
-    private static void requireText(String value, String field) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(field + " must not be blank");
-        }
-    }
 }

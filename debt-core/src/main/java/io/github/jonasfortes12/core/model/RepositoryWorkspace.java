@@ -1,5 +1,7 @@
 package io.github.jonasfortes12.core.model;
 
+import static io.github.jonasfortes12.core.util.Validation.requireText;
+
 import java.nio.file.Path;
 
 public record RepositoryWorkspace(Path rootDirectory, String repositoryUrl, String revision) {
@@ -11,9 +13,4 @@ public record RepositoryWorkspace(Path rootDirectory, String repositoryUrl, Stri
         requireText(repositoryUrl, "repositoryUrl");
     }
 
-    private static void requireText(String value, String field) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(field + " must not be blank");
-        }
-    }
 }

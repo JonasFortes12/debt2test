@@ -1,5 +1,7 @@
 package io.github.jonasfortes12.tester;
 
+import static io.github.jonasfortes12.core.util.Validation.requireText;
+
 import io.github.jonasfortes12.core.model.ExternalTaskSpec;
 
 public record TestPrompt(
@@ -53,9 +55,4 @@ public record TestPrompt(
         }
     }
 
-    private static void requireText(String value, String field) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(field + " must not be blank");
-        }
-    }
 }
