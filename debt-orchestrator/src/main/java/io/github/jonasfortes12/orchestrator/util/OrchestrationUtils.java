@@ -55,4 +55,13 @@ public final class OrchestrationUtils {
         }
         return result.toString();
     }
+
+    /**
+     * Print a pipeline progress message to standard output.
+     *
+     * @param message the message to log
+     */
+    public static void logPipeline(String message) {
+        System.out.println("[pipeline] " + message);
+    }
 }

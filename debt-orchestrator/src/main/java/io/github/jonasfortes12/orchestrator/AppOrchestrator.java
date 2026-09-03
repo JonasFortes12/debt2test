@@ -49,24 +49,21 @@ public final class AppOrchestrator {
     }
 
     public static void main(String[] args) {
-        System.exit(run(args));
+        System.exit(executeFromCli(args).code());
     }
 
-    public static int run(String[] args) {
-        CliOptions options;
+    public static ExitCode executeFromCli(String[] args) {
         try {
-            options = parseArguments(args);
+            BootstrappedPipeline pipeline = CliBootstrapper.bootstrap(args);
+            return executePipeline(pipeline.options(), pipeline.application()::run);
         } catch (IllegalArgumentException ignored) {
             System.out.println("status=FAILED");
-            return 2;
-        }
-        try {
-            LlmConfig llmConfig = new LlmConfig();
-            PipelineApplicationService application = createApplication(options, llmConfig);
-            return run(options, application::run);
+            System.out.println(ExitCode.INVALID_ARGUMENTS.description());
+            return ExitCode.INVALID_ARGUMENTS;
         } catch (RuntimeException ignored) {
             System.out.println("status=FAILED");
-            return 1;
+            System.out.println(ExitCode.FATAL_ERROR.description());
+            return ExitCode.FATAL_ERROR;
         }
     }
 
@@ -76,17 +73,19 @@ public final class AppOrchestrator {
             options = parseArguments(args);
         } catch (IllegalArgumentException ignored) {
             System.out.println("status=FAILED");
-            return 2;
+            System.out.println(ExitCode.INVALID_ARGUMENTS.description());
+            return ExitCode.INVALID_ARGUMENTS.code();
         }
         try {
-            return run(options, executor);
+            return executePipeline(options, executor).code();
         } catch (RuntimeException ignored) {
             System.out.println("status=FAILED");
-            return 1;
+            System.out.println(ExitCode.FATAL_ERROR.description());
+            return ExitCode.FATAL_ERROR.code();
         }
     }
 
-    private static int run(CliOptions options, PipelineExecutor executor) {
+    private static ExitCode executePipeline(CliOptions options, PipelineExecutor executor) {
         PipelineResult result = Objects.requireNonNull(
                 executor.execute(createRequest(options)),
                 "pipeline result must not be null");
@@ -96,7 +95,9 @@ public final class AppOrchestrator {
                 System.out.println("artifact=" + path);
             }
         }
-        return result.status() == RunStatus.COMPLETED ? 0 : 1;
+        ExitCode exitCode = result.status() == RunStatus.COMPLETED ? ExitCode.SUCCESS : ExitCode.FATAL_ERROR;
+        System.out.println(exitCode.description());
+        return exitCode;
     }
 
     public static CliOptions parseArguments(String[] args) {

@@ -38,6 +38,8 @@ import io.github.jonasfortes12.core.result.ClassificationResult;
 import io.github.jonasfortes12.core.result.ContextEnrichmentResult;
 import io.github.jonasfortes12.core.result.ExtractionResult;
 import io.github.jonasfortes12.core.result.TestGenerationResult;
+import io.github.jonasfortes12.core.util.UrlSanitizer;
+import io.github.jonasfortes12.orchestrator.util.OrchestrationUtils;
 
 public final class PipelineApplicationService {
 
@@ -82,6 +84,8 @@ public final class PipelineApplicationService {
     public PipelineResult run(PipelineRequest request) {
         Objects.requireNonNull(request, "request must not be null");
 
+        OrchestrationUtils.logPipeline(
+                "preparing repository workspace for " + UrlSanitizer.sanitize(request.repository().repositoryUrl()));
         RepositoryWorkspace workspace;
         try {
             workspace = workspaceProvider.prepare(request.repository());
@@ -91,6 +95,7 @@ public final class PipelineApplicationService {
         } catch (Exception ignored) {
             return failedPreparation(request.runId());
         }
+        OrchestrationUtils.logPipeline("workspace ready at " + workspace.rootDirectory());
 
         PipelineRequest executionRequest = request;
         PipelineError runIdError = null;
@@ -120,6 +125,7 @@ public final class PipelineApplicationService {
             assembled = assembled.withStatus(statusFor(assembled.errors()));
         }
 
+        OrchestrationUtils.logPipeline("writing pipeline report...");
         try {
             ReportArtifact artifact = reportSink.write(assembled, executionRequest.report());
             if (!validArtifact(artifact)) {
@@ -174,6 +180,7 @@ public final class PipelineApplicationService {
     }
 
     private void executeStages(PipelineRequest request, RepositoryWorkspace workspace, ExecutionState state) {
+        OrchestrationUtils.logPipeline("extracting SATD candidates...");
         ExtractionResult extraction;
         try {
             extraction = extractor.extract(workspace, request.extraction());
@@ -187,7 +194,9 @@ public final class PipelineApplicationService {
         }
         state.addStageErrors("extraction", extraction.errors());
         List<SatdCandidate> candidates = indexCandidates(extraction.candidates(), state);
+        OrchestrationUtils.logPipeline("extracted " + candidates.size() + " SATD candidate(s)");
 
+        OrchestrationUtils.logPipeline("classifying " + candidates.size() + " candidate(s)...");
         ClassificationResult classification;
         try {
             classification = classifier.classify(candidates, request.classification());
@@ -205,7 +214,9 @@ public final class PipelineApplicationService {
         List<ClassifiedDebt> satd = state.classificationsById.values().stream()
                 .filter(ClassifiedDebt::satd)
                 .toList();
+        OrchestrationUtils.logPipeline("classification complete: " + satd.size() + " candidate(s) flagged as SATD");
 
+        OrchestrationUtils.logPipeline("enriching context for " + satd.size() + " SATD candidate(s)...");
         ContextEnrichmentResult enrichment;
         try {
             enrichment = contextEnricher.enrich(satd, request.context());
@@ -224,6 +235,7 @@ public final class PipelineApplicationService {
         state.addStageErrors("context", enrichment.errors());
         state.enrichmentsById = indexEnrichments(enrichment.enrichments(), state);
         addMissingContextErrors(state);
+        OrchestrationUtils.logPipeline("context enrichment complete for " + state.enrichmentsById.size() + " candidate(s)");
 
         if (!satd.isEmpty() && state.enrichmentsById.isEmpty()) {
             return;
@@ -231,6 +243,7 @@ public final class PipelineApplicationService {
 
         state.generationExpectedIds = Collections.unmodifiableSet(
                 new LinkedHashSet<>(state.enrichmentsById.keySet()));
+        OrchestrationUtils.logPipeline("generating tests for " + state.generationExpectedIds.size() + " candidate(s)...");
         TestGenerationResult generation;
         try {
             generation = testGenerator.generate(
@@ -248,6 +261,7 @@ public final class PipelineApplicationService {
         state.addStageErrors("generation", generation.errors());
         state.generatedById = indexGeneratedTests(generation.generatedTests(), state);
         addMissingGenerationErrors(state);
+        OrchestrationUtils.logPipeline("test generation complete for " + state.generatedById.size() + " candidate(s)");
     }
 
     private PipelineResult assemble(String runId, RepositoryWorkspace workspace, ExecutionState state) {

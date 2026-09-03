@@ -180,7 +180,8 @@ class AppOrchestratorTest {
                 });
 
         assertEquals(2, exitCode);
-        assertEquals(2, AppOrchestrator.run(new String[]{"repo", "binary", "multi", "output", "run", "revision", "extra"}));
+        assertEquals(ExitCode.INVALID_ARGUMENTS,
+                AppOrchestrator.executeFromCli(new String[]{"repo", "binary", "multi", "output", "run", "revision", "extra"}));
     }
 
     @Test
