@@ -57,35 +57,19 @@ public final class AppOrchestrator {
             BootstrappedPipeline pipeline = CliBootstrapper.bootstrap(args);
             return executePipeline(pipeline.options(), pipeline.application()::run);
         } catch (IllegalArgumentException ignored) {
-            System.out.println("status=FAILED");
-            System.out.println(ExitCode.INVALID_ARGUMENTS.description());
-            return ExitCode.INVALID_ARGUMENTS;
+            return reportFailure(ExitCode.INVALID_ARGUMENTS);
         } catch (RuntimeException ignored) {
-            System.out.println("status=FAILED");
-            System.out.println(ExitCode.FATAL_ERROR.description());
-            return ExitCode.FATAL_ERROR;
+            return reportFailure(ExitCode.FATAL_ERROR);
         }
     }
 
-    public static int run(String[] args, PipelineExecutor executor) {
-        CliOptions options;
-        try {
-            options = parseArguments(args);
-        } catch (IllegalArgumentException ignored) {
-            System.out.println("status=FAILED");
-            System.out.println(ExitCode.INVALID_ARGUMENTS.description());
-            return ExitCode.INVALID_ARGUMENTS.code();
-        }
-        try {
-            return executePipeline(options, executor).code();
-        } catch (RuntimeException ignored) {
-            System.out.println("status=FAILED");
-            System.out.println(ExitCode.FATAL_ERROR.description());
-            return ExitCode.FATAL_ERROR.code();
-        }
+    private static ExitCode reportFailure(ExitCode exitCode) {
+        System.out.println("status=FAILED");
+        System.out.println(exitCode.description());
+        return exitCode;
     }
 
-    private static ExitCode executePipeline(CliOptions options, PipelineExecutor executor) {
+    static ExitCode executePipeline(CliOptions options, PipelineExecutor executor) {
         PipelineResult result = Objects.requireNonNull(
                 executor.execute(createRequest(options)),
                 "pipeline result must not be null");

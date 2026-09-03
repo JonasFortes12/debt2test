@@ -154,32 +154,27 @@ class AppOrchestratorTest {
     }
 
     @Test
-    void runMapsPipelineStatusesToExitCodesWithoutSystemExit() {
+    void executePipelineMapsPipelineStatusesToExitCodes() {
+        AppOrchestrator.CliOptions options = AppOrchestrator.parseArguments(new String[0]);
         List<String> runIds = new ArrayList<>();
-        int completed = AppOrchestrator.run(new String[0], request -> {
+        ExitCode completed = AppOrchestrator.executePipeline(options, request -> {
             runIds.add(request.runId());
             return result(request.runId(), RunStatus.COMPLETED);
         });
-        int completedWithErrors = AppOrchestrator.run(new String[0], request ->
+        ExitCode completedWithErrors = AppOrchestrator.executePipeline(options, request ->
                 result(request.runId(), RunStatus.COMPLETED_WITH_ERRORS));
-        int failed = AppOrchestrator.run(new String[0], request ->
+        ExitCode failed = AppOrchestrator.executePipeline(options, request ->
                 result(request.runId(), RunStatus.FAILED));
 
-        assertEquals(0, completed);
-        assertEquals(1, completedWithErrors);
-        assertEquals(1, failed);
+        assertEquals(ExitCode.SUCCESS, completed);
+        assertEquals(ExitCode.FATAL_ERROR, completedWithErrors);
+        assertEquals(ExitCode.FATAL_ERROR, failed);
         assertEquals(1, runIds.size());
         assertEquals(PipelineApplicationService.AUTOMATIC_RUN_ID, runIds.get(0));
     }
 
     @Test
-    void runReturnsAnInvalidArgumentExitCodeWithoutInvokingThePipeline() {
-        int exitCode = AppOrchestrator.run(new String[]{"repo", "binary", "multi", "output", "run", "revision", "extra"},
-                request -> {
-                    throw new AssertionError("invalid arguments must not build a pipeline");
-                });
-
-        assertEquals(2, exitCode);
+    void executeFromCliReturnsAnInvalidArgumentExitCodeWithoutInvokingThePipeline() {
         assertEquals(ExitCode.INVALID_ARGUMENTS,
                 AppOrchestrator.executeFromCli(new String[]{"repo", "binary", "multi", "output", "run", "revision", "extra"}));
     }
