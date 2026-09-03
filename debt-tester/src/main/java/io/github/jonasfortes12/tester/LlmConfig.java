@@ -13,33 +13,73 @@ public class LlmConfig {
                 .ignoreIfMissing()
                 .load();
 
-        this.provider = getConfigValue(dotenv, "DEBT_TESTER_PROVIDER", "openai");
+        this.provider = requireSupportedProvider(getConfigValue(dotenv, "DEBT_TESTER_PROVIDER", "openai"));
         this.apiKey = getConfigValue(dotenv, "DEBT_TESTER_API_KEY", "");
-        
-        String defaultModel = "gpt-4o";
-        if (provider.equalsIgnoreCase("anthropic")) {
-            defaultModel = "claude-3-5-sonnet-20241022";
-        } else if (provider.equalsIgnoreCase("gemini")) {
-            defaultModel = "gemini-3.5-flash-lite";
-        }
-        
-        this.model = getConfigValue(dotenv, "DEBT_TESTER_MODEL", defaultModel);
+
+        this.model = getConfigValue(dotenv, "DEBT_TESTER_MODEL", defaultModelFor(provider));
         this.endpoint = getConfigValue(dotenv, "DEBT_TESTER_ENDPOINT", "");
+    }
+
+    public LlmConfig(String provider, String apiKey, String model, String endpoint) {
+        this.provider = requireSupportedProvider(provider);
+        this.apiKey = normalizeEnvironmentValue(apiKey, "");
+        this.model = requireValue(model, "model");
+        this.endpoint = endpoint == null ? "" : endpoint.trim();
     }
 
     private String getConfigValue(Dotenv dotenv, String key, String defaultValue) {
         String val = System.getenv(key);
-        if (val == null || val.isEmpty()) {
+        if (val == null || val.isBlank()) {
             val = dotenv.get(key);
         }
-        if (val == null || val.isEmpty()) {
-            return defaultValue;
-        }
-        return val;
+        return normalizeEnvironmentValue(val, defaultValue);
     }
 
-    public String getProvider() { return provider; }
-    public String getApiKey() { return apiKey; }
-    public String getModel() { return model; }
-    public String getEndpoint() { return endpoint; }
+    private static String requireValue(String value, String field) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(field + " must not be blank");
+        }
+        return value.trim();
+    }
+
+    static String normalizeEnvironmentValue(String value, String defaultValue) {
+        return value == null || value.isBlank() ? defaultValue : value.trim();
+    }
+
+    static String defaultModelFor(String provider) {
+        if (provider.equalsIgnoreCase("anthropic")) {
+            return "claude-sonnet-4-6";
+        }
+        if (provider.equalsIgnoreCase("gemini")) {
+            return "gemini-3.5-flash-lite";
+        }
+        return "gpt-4o";
+    }
+
+    private static String requireSupportedProvider(String provider) {
+        String value = requireValue(provider, "provider");
+        if (!value.equalsIgnoreCase("openai")
+                && !value.equalsIgnoreCase("anthropic")
+                && !value.equalsIgnoreCase("gemini")) {
+            throw new IllegalArgumentException(
+                    "Unsupported LLM provider: " + value + ". Supported providers: openai, anthropic, gemini");
+        }
+        return value;
+    }
+
+    public String getProvider() {
+        return provider;
+    }
+
+    public String getApiKey() {
+        return apiKey;
+    }
+
+    public String getModel() {
+        return model;
+    }
+
+    public String getEndpoint() {
+        return endpoint;
+    }
 }
