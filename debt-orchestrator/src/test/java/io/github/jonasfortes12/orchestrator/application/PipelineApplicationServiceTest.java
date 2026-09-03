@@ -1,5 +1,22 @@
 package io.github.jonasfortes12.orchestrator.application;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.Test;
+
 import io.github.jonasfortes12.core.error.PipelineException;
 import io.github.jonasfortes12.core.model.ClassificationOptions;
 import io.github.jonasfortes12.core.model.ClassifiedDebt;
@@ -34,22 +51,6 @@ import io.github.jonasfortes12.core.result.ClassificationResult;
 import io.github.jonasfortes12.core.result.ContextEnrichmentResult;
 import io.github.jonasfortes12.core.result.ExtractionResult;
 import io.github.jonasfortes12.core.result.TestGenerationResult;
-import org.junit.jupiter.api.Test;
-
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PipelineApplicationServiceTest {
 
@@ -63,13 +64,16 @@ class PipelineApplicationServiceTest {
         assertEquals(List.of("prepare", "extract", "classify", "context", "generate", "release", "report"), calls);
         assertEquals(RunStatus.COMPLETED, result.status());
         assertEquals(List.of(stages.candidateC.candidateId(), stages.candidateA.candidateId()), stages.contextInputIds);
-        assertEquals(List.of(stages.candidateA.candidateId(), stages.candidateC.candidateId()), stages.generationInputIds);
+        assertEquals(List.of(stages.candidateA.candidateId(), stages.candidateC.candidateId()),
+                stages.generationInputIds);
 
         Map<String, PipelineItemResult> items = itemsById(result);
         assertEquals(stages.classifiedA, items.get(stages.candidateA.candidateId()).classification());
         assertEquals(stages.classifiedC, items.get(stages.candidateC.candidateId()).classification());
-        assertEquals(stages.candidateA.candidateId(), items.get(stages.candidateA.candidateId()).generatedTest().candidateId());
-        assertEquals(stages.candidateC.candidateId(), items.get(stages.candidateC.candidateId()).generatedTest().candidateId());
+        assertEquals(stages.candidateA.candidateId(),
+                items.get(stages.candidateA.candidateId()).generatedTest().candidateId());
+        assertEquals(stages.candidateC.candidateId(),
+                items.get(stages.candidateC.candidateId()).generatedTest().candidateId());
         assertNull(items.get(stages.candidateB.candidateId()).enrichment());
         assertNull(items.get(stages.candidateB.candidateId()).generatedTest());
         assertTrue(result.errors().isEmpty());
@@ -147,27 +151,6 @@ class PipelineApplicationServiceTest {
     }
 
     @Test
-    void preservesSanitizedRollbackFailureClassificationFromReportSink() {
-        List<String> calls = new ArrayList<>();
-        FakeStages stages = FakeStages.successful(calls);
-        stages.reportFailure = new PipelineException(new PipelineError(
-                "report", "REPORT_ROLLBACK_FAILED", "credential=top-secret stack trace", null, false));
-
-        PipelineResult result = stages.service().run(request("run-1"));
-
-        assertEquals(RunStatus.FAILED, result.status());
-        PipelineError reportError = result.errors().stream()
-                .filter(error -> error.code().equals("REPORT_ROLLBACK_FAILED"))
-                .findFirst()
-                .orElseThrow();
-        assertEquals("report", reportError.stage());
-        assertEquals("REPORT_ROLLBACK_FAILED", reportError.code());
-        assertEquals("pipeline report rollback could not be completed", reportError.message());
-        assertFalse(reportError.message().contains("top-secret"));
-        assertFalse(reportError.message().contains("stack trace"));
-    }
-
-    @Test
     void missingClassificationBecomesCorrelationErrorInsteadOfDroppingCandidate() {
         List<String> calls = new ArrayList<>();
         FakeStages stages = FakeStages.successful(calls);
@@ -186,23 +169,6 @@ class PipelineApplicationServiceTest {
                 .anyMatch(error -> error.code().equals("CLASSIFICATION_RESULT_MISSING")));
         assertTrue(result.errors().stream()
                 .anyMatch(error -> error.code().equals("CLASSIFICATION_RESULT_MISSING")));
-    }
-
-    @Test
-    void quarantinesUnknownClassificationWithoutSendingItDownstream() {
-        List<String> calls = new ArrayList<>();
-        FakeStages stages = FakeStages.successful(calls);
-        stages.classification = new ClassificationResult(
-                List.of(stages.classifiedD, stages.classifiedB, stages.classifiedC, stages.classifiedA), List.of());
-
-        PipelineResult result = stages.service().run(request("run-1"));
-
-        assertEquals(List.of("prepare", "extract", "classify", "context", "generate", "release", "report"), calls);
-        assertFalse(itemsById(result).containsKey(stages.candidateD.candidateId()));
-        assertFalse(stages.contextInputIds.contains(stages.candidateD.candidateId()));
-        assertFalse(stages.generationInputIds.contains(stages.candidateD.candidateId()));
-        assertTrue(result.errors().stream().anyMatch(error ->
-                error.code().equals("CLASSIFICATION_UNKNOWN_CANDIDATE")));
     }
 
     @Test
@@ -414,43 +380,6 @@ class PipelineApplicationServiceTest {
     }
 
     @Test
-    void orphanDuplicateAndNonSatdContextOutputsRemainVisibleAsErrors() {
-        List<String> calls = new ArrayList<>();
-        FakeStages stages = FakeStages.successful(calls);
-        stages.contextResult = new ContextEnrichmentResult(
-                List.of(stages.enrichedA, stages.enrichedA, stages.enrichedB, stages.enrichedD), List.of());
-        stages.generationResult = new TestGenerationResult(List.of(stages.generated(stages.candidateA.candidateId())), List.of());
-
-        PipelineResult result = stages.service().run(request("run-1"));
-
-        Map<String, PipelineItemResult> items = itemsById(result);
-        assertEquals(List.of(stages.candidateA.candidateId()), stages.generationInputIds);
-        assertNotNull(items.get(stages.candidateA.candidateId()).enrichment());
-        assertNull(items.get(stages.candidateB.candidateId()).enrichment());
-        assertNull(items.get(stages.candidateC.candidateId()).enrichment());
-        assertTrue(result.errors().stream().anyMatch(error -> error.code().equals("DUPLICATE_CONTEXT_RESULT_ID")));
-        assertTrue(result.errors().stream().anyMatch(error -> error.code().equals("CONTEXT_NON_SATD_RESULT")));
-        assertTrue(result.errors().stream().anyMatch(error -> error.code().equals("CONTEXT_UNKNOWN_CANDIDATE")));
-        assertTrue(result.errors().stream().anyMatch(error -> error.code().equals("CONTEXT_RESULT_MISSING")));
-    }
-
-    @Test
-    void nullContextEntryDoesNotDiscardValidSibling() {
-        List<String> calls = new ArrayList<>();
-        FakeStages stages = FakeStages.successful(calls);
-        List<EnrichedSatdDebt> enrichments = new ArrayList<>(List.of(stages.enrichedA, stages.enrichedC));
-        enrichments.add(null);
-        stages.contextResult = new ContextEnrichmentResult(enrichments, List.of());
-
-        PipelineResult result = stages.service().run(request("run-1"));
-
-        Map<String, PipelineItemResult> items = itemsById(result);
-        assertNotNull(items.get(stages.candidateA.candidateId()).generatedTest());
-        assertNotNull(items.get(stages.candidateC.candidateId()).generatedTest());
-        assertTrue(result.errors().stream().anyMatch(error -> error.code().equals("CONTEXT_NULL_RESULT_ENTRY")));
-    }
-
-    @Test
     void preservesEmbeddedErrorsFromRejectedContextAndGenerationOutputs() {
         List<String> calls = new ArrayList<>();
         FakeStages stages = FakeStages.successful(calls);
@@ -464,7 +393,8 @@ class PipelineApplicationServiceTest {
                         "context provider secret"))),
                 withErrors(stages.enrichedD, List.of(error(
                         "context", "UNKNOWN_CONTEXT_FATAL", stages.candidateD.candidateId(), false,
-                        "context provider secret")))), List.of());
+                        "context provider secret")))),
+                List.of());
         stages.generationResult = new TestGenerationResult(List.of(
                 stages.generated(stages.candidateA.candidateId()),
                 stages.failedGenerated(stages.candidateA.candidateId(), error(
@@ -475,7 +405,8 @@ class PipelineApplicationServiceTest {
                         "generation provider secret")),
                 stages.failedGenerated(stages.candidateD.candidateId(), error(
                         "generation", "UNKNOWN_GENERATION_FATAL", stages.candidateD.candidateId(), false,
-                        "generation provider secret"))), List.of());
+                        "generation provider secret"))),
+                List.of());
 
         PipelineResult result = stages.service().run(request("run-1"));
 
@@ -486,30 +417,6 @@ class PipelineApplicationServiceTest {
         assertTrue(result.errors().stream().anyMatch(error -> error.code().equals("DUPLICATE_GENERATION_FATAL")));
         assertTrue(result.errors().stream().anyMatch(error -> error.code().equals("NON_SATD_GENERATION_FATAL")));
         assertTrue(result.errors().stream().anyMatch(error -> error.code().equals("UNKNOWN_GENERATION_FATAL")));
-    }
-
-    @Test
-    void orphanDuplicateAndNonSatdGenerationOutputsRemainVisibleAsErrors() {
-        List<String> calls = new ArrayList<>();
-        FakeStages stages = FakeStages.successful(calls);
-        stages.generationResult = new TestGenerationResult(
-                List.of(
-                        stages.generated(stages.candidateA.candidateId()),
-                        stages.generated(stages.candidateA.candidateId()),
-                        stages.generated(stages.candidateB.candidateId()),
-                        stages.generated(stages.candidateD.candidateId()),
-                        stages.generated(stages.candidateC.candidateId())),
-                List.of());
-
-        PipelineResult result = stages.service().run(request("run-1"));
-
-        Map<String, PipelineItemResult> items = itemsById(result);
-        assertNotNull(items.get(stages.candidateA.candidateId()).generatedTest());
-        assertNotNull(items.get(stages.candidateC.candidateId()).generatedTest());
-        assertNull(items.get(stages.candidateB.candidateId()).generatedTest());
-        assertTrue(result.errors().stream().anyMatch(error -> error.code().equals("DUPLICATE_GENERATION_RESULT_ID")));
-        assertTrue(result.errors().stream().anyMatch(error -> error.code().equals("GENERATION_NON_SATD_RESULT")));
-        assertTrue(result.errors().stream().anyMatch(error -> error.code().equals("GENERATION_UNKNOWN_CANDIDATE")));
     }
 
     @Test
@@ -555,8 +462,7 @@ class PipelineApplicationServiceTest {
 
         assertEquals(RunStatus.FAILED, result.status());
         assertNull(result.reportArtifact());
-        assertTrue(result.errors().stream().anyMatch(error ->
-                error.code().equals("REPORT_ARTIFACT_MISSING")));
+        assertTrue(result.errors().stream().anyMatch(error -> error.code().equals("REPORT_ARTIFACT_MISSING")));
     }
 
     @Test
@@ -570,8 +476,7 @@ class PipelineApplicationServiceTest {
 
         assertEquals(RunStatus.FAILED, result.status());
         assertNull(result.reportArtifact());
-        assertTrue(result.errors().stream().anyMatch(error ->
-                error.code().equals("REPORT_ARTIFACT_MISSING")));
+        assertTrue(result.errors().stream().anyMatch(error -> error.code().equals("REPORT_ARTIFACT_MISSING")));
     }
 
     @Test
@@ -591,7 +496,7 @@ class PipelineApplicationServiceTest {
         automaticRequest = new PipelineRequest(
                 automaticRequest.runId(), automaticRequest.repository(), automaticRequest.extraction(),
                 automaticRequest.classification(), automaticRequest.context(), automaticRequest.testGeneration(),
-                automaticRequest.report(), true);
+                automaticRequest.report());
         PipelineResult result = service.run(automaticRequest);
 
         assertEquals("resolved-run", result.runId());
@@ -665,8 +570,8 @@ class PipelineApplicationServiceTest {
 
     private static final class FakeStages {
         private final List<String> calls;
-        private final RepositoryWorkspace workspace =
-                new RepositoryWorkspace(Path.of("/tmp/fake-workspace"), "https://example.test/repository", "main");
+        private final RepositoryWorkspace workspace = new RepositoryWorkspace(Path.of("/tmp/fake-workspace"),
+                "https://example.test/repository", "main");
         private final SatdCandidate candidateA = candidate("run-1:src/A.java:10:save", "src/A.java", "save", 10);
         private final SatdCandidate candidateB = candidate("run-1:src/B.java:20:load", "src/B.java", "load", 20);
         private final SatdCandidate candidateC = candidate("run-1:src/C.java:30:delete", "src/C.java", "delete", 30);
@@ -744,7 +649,8 @@ class PipelineApplicationServiceTest {
         private EnrichedSatdDebt enriched(ClassifiedDebt classified, String key) {
             return new EnrichedSatdDebt(
                     classified,
-                    new ExternalTaskSpec("fake", key, "summary", "description", List.of(), List.of(), "https://example.test/" + key),
+                    new ExternalTaskSpec("fake", key, "summary", "description", List.of(), List.of(),
+                            "https://example.test/" + key),
                     List.of(new ExternalReference(key, "comment")),
                     ContextStatus.MATCHED,
                     List.of());

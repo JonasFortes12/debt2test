@@ -26,7 +26,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AppOrchestratorTest {
 
@@ -80,9 +79,7 @@ class AppOrchestratorTest {
         PipelineRequest explicit = AppOrchestrator.createRequest(explicitAuto);
 
         assertEquals(PipelineApplicationService.AUTOMATIC_RUN_ID, automatic.runId());
-        assertTrue(automatic.automaticRunId());
         assertEquals("auto", explicit.runId());
-        assertFalse(explicit.automaticRunId());
         assertEquals("main", explicit.repository().revision());
     }
 

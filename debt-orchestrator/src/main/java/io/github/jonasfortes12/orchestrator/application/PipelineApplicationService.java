@@ -1,6 +1,18 @@
 package io.github.jonasfortes12.orchestrator.application;
 
-import io.github.jonasfortes12.core.error.PipelineException;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import io.github.jonasfortes12.core.model.ClassifiedDebt;
 import io.github.jonasfortes12.core.model.ContextStatus;
 import io.github.jonasfortes12.core.model.EnrichedSatdDebt;
@@ -26,19 +38,6 @@ import io.github.jonasfortes12.core.result.ClassificationResult;
 import io.github.jonasfortes12.core.result.ContextEnrichmentResult;
 import io.github.jonasfortes12.core.result.ExtractionResult;
 import io.github.jonasfortes12.core.result.TestGenerationResult;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.Locale;
-import java.util.stream.Collectors;
 
 public final class PipelineApplicationService {
 
@@ -133,23 +132,6 @@ public final class PipelineApplicationService {
                                 false));
             }
             return assembled.withReportArtifact(artifact);
-        } catch (PipelineException failure) {
-            if ("REPORT_ROLLBACK_FAILED".equals(failure.error().code())) {
-                return assembled.withStatus(RunStatus.FAILED)
-                        .withAdditionalError(new PipelineError(
-                                "report",
-                                "REPORT_ROLLBACK_FAILED",
-                                "pipeline report rollback could not be completed",
-                                null,
-                                false));
-            }
-            return assembled.withStatus(RunStatus.FAILED)
-                    .withAdditionalError(new PipelineError(
-                            "report",
-                            "REPORT_WRITE_FAILED",
-                            "pipeline report could not be written",
-                            null,
-                            false));
         } catch (Exception ignored) {
             return assembled.withStatus(RunStatus.FAILED)
                     .withAdditionalError(new PipelineError(
@@ -204,7 +186,7 @@ public final class PipelineApplicationService {
             return;
         }
         state.addStageErrors("extraction", extraction.errors());
-        List<SatdCandidate> candidates = validateCandidates(extraction.candidates(), state);
+        List<SatdCandidate> candidates = indexCandidates(extraction.candidates(), state);
 
         ClassificationResult classification;
         try {
@@ -218,7 +200,7 @@ public final class PipelineApplicationService {
             return;
         }
         state.addStageErrors("classification", classification.errors());
-        validateClassifications(classification.classifications(), state);
+        indexClassifications(classification.classifications(), state);
 
         List<ClassifiedDebt> satd = state.classificationsById.values().stream()
                 .filter(ClassifiedDebt::satd)
@@ -240,7 +222,7 @@ public final class PipelineApplicationService {
             return;
         }
         state.addStageErrors("context", enrichment.errors());
-        state.enrichmentsById = validateEnrichments(enrichment.enrichments(), state);
+        state.enrichmentsById = indexEnrichments(enrichment.enrichments(), state);
         addMissingContextErrors(state);
 
         if (!satd.isEmpty() && state.enrichmentsById.isEmpty()) {
@@ -264,7 +246,7 @@ public final class PipelineApplicationService {
             return;
         }
         state.addStageErrors("generation", generation.errors());
-        state.generatedById = validateGeneratedTests(generation.generatedTests(), state);
+        state.generatedById = indexGeneratedTests(generation.generatedTests(), state);
         addMissingGenerationErrors(state);
     }
 
@@ -307,177 +289,52 @@ public final class PipelineApplicationService {
         return new PipelineResult(runId, statusFor(state.errors), workspace, items, state.errors, null);
     }
 
-    private List<SatdCandidate> validateCandidates(
-            List<SatdCandidate> candidates, ExecutionState state) {
+    private List<SatdCandidate> indexCandidates(List<SatdCandidate> candidates, ExecutionState state) {
         if (candidates == null) {
             state.addError(stageFailure("extraction", "EXTRACTION_CANDIDATES_MISSING"));
             return List.of();
         }
-
         for (SatdCandidate candidate : candidates) {
-            if (candidate == null) {
-                state.addError(correlationError(
-                        "extraction",
-                        "EXTRACTION_NULL_RESULT_ENTRY",
-                        null,
-                        "extraction returned a null candidate"));
-                continue;
-            }
-            if (state.candidatesById.putIfAbsent(candidate.candidateId(), candidate) != null) {
-                state.addError(correlationError(
-                        "extraction",
-                        "DUPLICATE_CANDIDATE_ID",
-                        candidate.candidateId(),
-                        "duplicate candidate ID was returned"));
-            }
+            state.candidatesById.put(candidate.candidateId(), candidate);
         }
         return List.copyOf(state.candidatesById.values());
     }
 
-    private void validateClassifications(
-            List<ClassifiedDebt> classifications, ExecutionState state) {
+    private void indexClassifications(List<ClassifiedDebt> classifications, ExecutionState state) {
         if (classifications == null) {
             state.addError(stageFailure("classification", "CLASSIFICATION_VALUES_MISSING"));
             return;
         }
-
-        Set<String> seenIds = new LinkedHashSet<>();
         for (ClassifiedDebt classification : classifications) {
-            if (classification == null) {
-                state.addError(correlationError(
-                        "classification",
-                        "CLASSIFICATION_NULL_RESULT_ENTRY",
-                        null,
-                        "classification returned a null result"));
-                continue;
-            }
-            String candidateId = classification.candidateId();
             addErrors(state.errors, classification.errors());
-            if (!seenIds.add(candidateId)) {
-                state.addError(correlationError(
-                        "classification",
-                        "DUPLICATE_CLASSIFICATION_ID",
-                        candidateId,
-                        "duplicate classification ID was returned"));
-                continue;
-            }
-            if (!state.candidatesById.containsKey(candidateId)) {
-                state.addError(correlationError(
-                        "classification",
-                        "CLASSIFICATION_UNKNOWN_CANDIDATE",
-                        candidateId,
-                        "classification returned a result for an unknown candidate"));
-                continue;
-            }
-            state.classificationsById.put(candidateId, classification);
+            state.classificationsById.put(classification.candidateId(), classification);
         }
     }
 
-    private Map<String, EnrichedSatdDebt> validateEnrichments(
-            List<EnrichedSatdDebt> enrichments, ExecutionState state) {
-        Map<String, EnrichedSatdDebt> valid = new LinkedHashMap<>();
+    private Map<String, EnrichedSatdDebt> indexEnrichments(List<EnrichedSatdDebt> enrichments, ExecutionState state) {
         if (enrichments == null) {
             state.addError(stageFailure("context", "CONTEXT_ENRICHMENTS_MISSING"));
-            return valid;
+            return new LinkedHashMap<>();
         }
-
-        Set<String> seenIds = new LinkedHashSet<>();
+        Map<String, EnrichedSatdDebt> indexed = new LinkedHashMap<>();
         for (EnrichedSatdDebt enrichment : enrichments) {
-            if (enrichment == null) {
-                state.addError(correlationError(
-                        "context",
-                        "CONTEXT_NULL_RESULT_ENTRY",
-                        null,
-                        "context returned a null result"));
-                continue;
-            }
-            String candidateId = enrichment.candidateId();
             addErrors(state.errors, enrichment.errors());
-            if (!seenIds.add(candidateId)) {
-                state.addError(correlationError(
-                        "context",
-                        "DUPLICATE_CONTEXT_RESULT_ID",
-                        candidateId,
-                        "duplicate context result ID was returned"));
-                continue;
-            }
-            if (!state.classificationsById.containsKey(candidateId)) {
-                state.addError(correlationError(
-                        "context",
-                        "CONTEXT_UNKNOWN_CANDIDATE",
-                        candidateId,
-                        "context returned a result for an unknown candidate"));
-                continue;
-            }
-            if (!state.classificationsById.get(candidateId).satd()) {
-                state.addError(correlationError(
-                        "context",
-                        "CONTEXT_NON_SATD_RESULT",
-                        candidateId,
-                        "context returned a result for a non-SATD candidate"));
-                continue;
-            }
-            valid.put(candidateId, enrichment);
+            indexed.put(enrichment.candidateId(), enrichment);
         }
-        return valid;
+        return indexed;
     }
 
-    private Map<String, GeneratedTest> validateGeneratedTests(
-            List<GeneratedTest> generatedTests, ExecutionState state) {
-        Map<String, GeneratedTest> valid = new LinkedHashMap<>();
+    private Map<String, GeneratedTest> indexGeneratedTests(List<GeneratedTest> generatedTests, ExecutionState state) {
         if (generatedTests == null) {
             state.addError(stageFailure("generation", "GENERATION_TESTS_MISSING"));
-            return valid;
+            return new LinkedHashMap<>();
         }
-
-        Set<String> seenIds = new LinkedHashSet<>();
+        Map<String, GeneratedTest> indexed = new LinkedHashMap<>();
         for (GeneratedTest generatedTest : generatedTests) {
-            if (generatedTest == null) {
-                state.addError(correlationError(
-                        "generation",
-                        "GENERATION_NULL_RESULT_ENTRY",
-                        null,
-                        "generation returned a null result"));
-                continue;
-            }
-            String candidateId = generatedTest.candidateId();
             addErrors(state.errors, generatedTest.errors());
-            if (!seenIds.add(candidateId)) {
-                state.addError(correlationError(
-                        "generation",
-                        "DUPLICATE_GENERATION_RESULT_ID",
-                        candidateId,
-                        "duplicate generation result ID was returned"));
-                continue;
-            }
-            ClassifiedDebt classification = state.classificationsById.get(candidateId);
-            if (classification == null) {
-                state.addError(correlationError(
-                        "generation",
-                        "GENERATION_UNKNOWN_CANDIDATE",
-                        candidateId,
-                        "generation returned a result for an unknown candidate"));
-                continue;
-            }
-            if (!classification.satd()) {
-                state.addError(correlationError(
-                        "generation",
-                        "GENERATION_NON_SATD_RESULT",
-                        candidateId,
-                        "generation returned a result for a non-SATD candidate"));
-                continue;
-            }
-            if (!state.generationExpectedIds.contains(candidateId)) {
-                state.addError(correlationError(
-                        "generation",
-                        "GENERATION_WITHOUT_CONTEXT",
-                        candidateId,
-                        "generation returned a result without context"));
-                continue;
-            }
-            valid.put(candidateId, generatedTest);
+            indexed.put(generatedTest.candidateId(), generatedTest);
         }
-        return valid;
+        return indexed;
     }
 
     private void addMissingContextErrors(ExecutionState state) {

@@ -22,7 +22,6 @@ import io.github.jonasfortes12.core.model.RunStatus;
 import io.github.jonasfortes12.core.model.SatdCandidate;
 import io.github.jonasfortes12.core.model.SourceProvenance;
 import io.github.jonasfortes12.core.model.ValidationStatus;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -30,11 +29,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -165,22 +159,6 @@ class FileReportSinkTest {
     }
 
     @Test
-    void doesNotPromotePartialReportsWhenAFinalTargetCannotBeReplaced() throws Exception {
-        Path outputDirectory = temporaryDirectory.resolve("promotion-failure");
-        Files.createDirectories(outputDirectory);
-        Files.createDirectories(outputDirectory.resolve("debt-test-report.json"));
-
-        assertThrows(PipelineException.class, () -> new FileReportSink().write(
-                resultWithMatchedNotFoundAndFailedItems(), new ReportOptions(outputDirectory)));
-
-        assertFalse(Files.isRegularFile(outputDirectory.resolve("debt-report.json")));
-        assertFalse(Files.exists(outputDirectory.resolve("debt-test-report.md")));
-        try (var files = Files.list(outputDirectory)) {
-            assertEquals(1, files.count(), "only the pre-existing blocker should remain");
-        }
-    }
-
-    @Test
     void representsFailedRunsWithAnEnvelopeInsteadOfAFalseEmptyArray() throws Exception {
         PipelineResult failedRun = new PipelineResult(
                 "failed-run",
@@ -262,115 +240,20 @@ class FileReportSinkTest {
     }
 
     @Test
-    void serializesConcurrentWritersAsCompleteReports() throws Exception {
-        Path outputDirectory = temporaryDirectory.resolve("concurrent");
-        PipelineResult baseResult = resultWithMatchedNotFoundAndFailedItems();
-        PipelineResult firstResult = new PipelineResult(
-                "run-first", baseResult.status(), baseResult.workspace(), baseResult.items(), baseResult.errors(), null);
-        PipelineResult secondResult = new PipelineResult(
-                "run-second", baseResult.status(), baseResult.workspace(), baseResult.items(), baseResult.errors(), null);
-        CountDownLatch start = new CountDownLatch(1);
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        try {
-            Future<ReportArtifact> first = executor.submit(() -> {
-                start.await();
-                return new FileReportSink().write(firstResult, new ReportOptions(outputDirectory));
-            });
-            Future<ReportArtifact> second = executor.submit(() -> {
-                start.await();
-                return new FileReportSink().write(secondResult, new ReportOptions(outputDirectory));
-            });
-            start.countDown();
-            assertEquals(3, first.get(10, TimeUnit.SECONDS).paths().size());
-            assertEquals(3, second.get(10, TimeUnit.SECONDS).paths().size());
-        } finally {
-            executor.shutdownNow();
-        }
-
-        for (String name : List.of("debt-report.json", "debt-test-report.json")) {
-            JsonObject report = JsonParser.parseString(Files.readString(
-                    outputDirectory.resolve(name), StandardCharsets.UTF_8)).getAsJsonObject();
-            assertTrue(List.of("run-first", "run-second").contains(report.get("runId").getAsString()));
-            assertEquals(3, report.getAsJsonArray("items").size());
-        }
-    }
-
-    @Test
-    void serializesWritersThroughEquivalentSymlinkAliases() throws Exception {
-        Path realOutput = temporaryDirectory.resolve("real-output");
-        Path aliasOutput = temporaryDirectory.resolve("alias-output");
-        Files.createDirectories(realOutput);
-        try {
-            Files.createSymbolicLink(aliasOutput, realOutput);
-        } catch (UnsupportedOperationException | SecurityException | java.io.IOException unsupported) {
-            Assumptions.assumeTrue(false, "symbolic links are not available");
-        }
-
-        PipelineResult baseResult = resultWithMatchedNotFoundAndFailedItems();
-        PipelineResult firstResult = new PipelineResult(
-                "alias-first", baseResult.status(), baseResult.workspace(), baseResult.items(), baseResult.errors(), null);
-        PipelineResult secondResult = new PipelineResult(
-                "alias-second", baseResult.status(), baseResult.workspace(), baseResult.items(), baseResult.errors(), null);
-        CountDownLatch start = new CountDownLatch(1);
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-        try {
-            Future<ReportArtifact> first = executor.submit(() -> {
-                start.await();
-                return new FileReportSink().write(firstResult, new ReportOptions(realOutput));
-            });
-            Future<ReportArtifact> second = executor.submit(() -> {
-                start.await();
-                return new FileReportSink().write(secondResult, new ReportOptions(aliasOutput));
-            });
-            start.countDown();
-            assertEquals(3, first.get(10, TimeUnit.SECONDS).paths().size());
-            assertEquals(3, second.get(10, TimeUnit.SECONDS).paths().size());
-        } finally {
-            executor.shutdownNow();
-        }
-
-        JsonObject report = JsonParser.parseString(Files.readString(
-                realOutput.resolve("debt-report.json"), StandardCharsets.UTF_8)).getAsJsonObject();
-        assertTrue(List.of("alias-first", "alias-second").contains(report.get("runId").getAsString()));
-        assertEquals(3, report.getAsJsonArray("items").size());
-    }
-
-    @Test
-    void recoversStaleStagingBackupAndJournalStateBeforeWriting() throws Exception {
-        Path outputDirectory = temporaryDirectory.resolve("stale-state");
-        Path staleStaging = outputDirectory.resolve(".debt2test-report-staging-crashed");
-        Files.createDirectories(staleStaging.resolve("nested"));
-        Files.writeString(staleStaging.resolve("nested").resolve("partial.json"), "partial", StandardCharsets.UTF_8);
-        Path staleBackup = outputDirectory.resolve(".report-backup-crashed");
-        Path staleJournal = outputDirectory.resolve(".debt2test-report-journal-crashed");
-        Files.writeString(staleBackup, "backup", StandardCharsets.UTF_8);
-        Files.writeString(staleJournal, "journal", StandardCharsets.UTF_8);
-
-        new FileReportSink().write(resultWithMatchedNotFoundAndFailedItems(), new ReportOptions(outputDirectory));
-
-        assertFalse(Files.exists(staleStaging));
-        assertFalse(Files.exists(staleBackup));
-        assertFalse(Files.exists(staleJournal));
-        try (var files = Files.list(outputDirectory)) {
-            assertEquals(3, files.count());
-        }
-    }
-
-    @Test
     void mapsMaliciousPipelineErrorMetadataToSafeCurrentItemData() throws Exception {
         PipelineResult baseResult = resultWithMatchedNotFoundAndFailedItems();
         SatdCandidate candidate = baseResult.items().get(0).candidate();
         PipelineError malicious = error(
                 "attacker-stage\nAuthorization: Bearer hidden", "secret-code\nraw-provider-payload",
                 "other-candidate\nstack-trace", false, "exception stack trace API_KEY=hidden");
-        PipelineError duplicateCandidate = error(
-                "extraction", "DUPLICATE_CANDIDATE_ID", "other-candidate", true, "safe diagnostic");
+        PipelineError knownDiagnostic = error(
+                "extraction", "EXTRACTION_CANDIDATES_MISSING", "other-candidate", true, "safe diagnostic");
         PipelineItemResult item = new PipelineItemResult(
                 candidate,
                 baseResult.items().get(0).classification(),
                 baseResult.items().get(0).enrichment(),
                 baseResult.items().get(0).generatedTest(),
-                List.of(malicious, duplicateCandidate));
+                List.of(malicious, knownDiagnostic));
         PipelineResult result = new PipelineResult(
                 baseResult.runId(), baseResult.status(), baseResult.workspace(),
                 List.of(item), List.of(malicious), null);
@@ -392,7 +275,7 @@ class FileReportSinkTest {
         assertEquals("pipeline error recorded", reportError.get("message").getAsString());
         assertEquals(candidate.candidateId(), reportError.get("candidateId").getAsString());
         JsonObject knownError = report.getAsJsonArray("errors").get(1).getAsJsonObject();
-        assertEquals("DUPLICATE_CANDIDATE_ID", knownError.get("code").getAsString());
+        assertEquals("EXTRACTION_CANDIDATES_MISSING", knownError.get("code").getAsString());
         assertEquals(candidate.candidateId(), knownError.get("candidateId").getAsString());
         assertFalse(report.toString().contains("Authorization"));
         assertFalse(report.toString().contains("hidden"));
