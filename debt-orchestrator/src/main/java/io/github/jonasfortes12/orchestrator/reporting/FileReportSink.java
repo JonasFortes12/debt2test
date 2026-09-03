@@ -15,6 +15,7 @@ import io.github.jonasfortes12.core.model.Provenance;
 import io.github.jonasfortes12.core.model.ReportArtifact;
 import io.github.jonasfortes12.core.model.ReportOptions;
 import io.github.jonasfortes12.core.port.ReportSink;
+import io.github.jonasfortes12.core.util.UrlSanitizer;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -117,7 +118,7 @@ public final class FileReportSink implements ReportSink {
                 provenance(classification.provenance()),
                 errors(item),
                 result.runId(),
-                ReportUrlSanitizer.sanitize(item.candidate().sourceProvenance().repositoryUrl()),
+                UrlSanitizer.sanitize(item.candidate().sourceProvenance().repositoryUrl()),
                 item.candidate().sourceProvenance().revision());
     }
 
@@ -163,7 +164,7 @@ public final class FileReportSink implements ReportSink {
     }
 
     private static DebtReportItem.IssueReference reference(ExternalReference reference) {
-        return new DebtReportItem.IssueReference(ReportUrlSanitizer.sanitize(reference.value()), reference.source());
+        return new DebtReportItem.IssueReference(UrlSanitizer.sanitize(reference.value()), reference.source());
     }
 
     private static DebtReportItem.ExternalTask externalTask(EnrichedSatdDebt enrichment) {
@@ -178,7 +179,7 @@ public final class FileReportSink implements ReportSink {
                 task.description(),
                 task.acceptanceCriteria(),
                 task.labels(),
-                ReportUrlSanitizer.sanitize(task.url()));
+                UrlSanitizer.sanitize(task.url()));
     }
 
     private static DebtReportItem.ClassificationProvenance provenance(Provenance provenance) {

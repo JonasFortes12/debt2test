@@ -5,6 +5,7 @@ import io.github.jonasfortes12.core.model.PipelineError;
 import io.github.jonasfortes12.core.model.RepositoryRequest;
 import io.github.jonasfortes12.core.model.RepositoryWorkspace;
 import io.github.jonasfortes12.core.port.RepositoryWorkspaceProvider;
+import io.github.jonasfortes12.core.util.UrlSanitizer;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.ObjectId;
 
@@ -59,7 +60,7 @@ public final class GitCloneService implements RepositoryWorkspaceProvider {
 
             RepositoryWorkspace workspace = new RepositoryWorkspace(
                     directory,
-                    RepositoryUrlSanitizer.sanitize(rawRepositoryUrl),
+                    UrlSanitizer.sanitize(rawRepositoryUrl),
                     resolvedRevision);
             managedWorkspaces.add(normalize(directory));
             return workspace;

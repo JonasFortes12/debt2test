@@ -19,6 +19,7 @@ import io.github.jonasfortes12.core.port.ReportSink;
 import io.github.jonasfortes12.core.port.RepositoryWorkspaceProvider;
 import io.github.jonasfortes12.core.port.SatdExtractor;
 import io.github.jonasfortes12.core.port.TestGenerator;
+import io.github.jonasfortes12.core.util.UrlSanitizer;
 import io.github.jonasfortes12.extractor.AstCommentExtractor;
 import io.github.jonasfortes12.extractor.GitCloneService;
 import io.github.jonasfortes12.orchestrator.application.PipelineApplicationService;
@@ -128,7 +129,7 @@ public final class AppOrchestrator {
         String repositoryUrl = workspace == null ? options.repositoryUrl() : workspace.repositoryUrl();
         String revision = workspace == null ? options.revision() : workspace.revision();
         String material = String.join("\n",
-                io.github.jonasfortes12.orchestrator.reporting.ReportUrlSanitizer.sanitize(repositoryUrl),
+                UrlSanitizer.sanitize(repositoryUrl),
                 valueOrEmpty(revision),
                 options.binaryModelPath(),
                 modelDigest(options.binaryModelPath()),
@@ -266,7 +267,7 @@ public final class AppOrchestrator {
                 default -> "https://api.openai.com/v1/chat/completions";
             };
         }
-        return io.github.jonasfortes12.orchestrator.reporting.ReportUrlSanitizer.sanitize(endpoint);
+        return UrlSanitizer.sanitize(endpoint);
     }
 
     private static String valueOrEmpty(String value) {

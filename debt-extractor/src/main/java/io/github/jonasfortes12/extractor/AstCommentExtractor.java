@@ -13,6 +13,7 @@ import io.github.jonasfortes12.core.model.SatdCandidate;
 import io.github.jonasfortes12.core.model.SourceProvenance;
 import io.github.jonasfortes12.core.port.SatdExtractor;
 import io.github.jonasfortes12.core.result.ExtractionResult;
+import io.github.jonasfortes12.core.util.UrlSanitizer;
 
 import java.io.File;
 import java.io.IOException;
@@ -94,7 +95,7 @@ public final class AstCommentExtractor implements SatdExtractor {
                         method.getComment().orElseThrow().getContent().trim(),
                         method.toString(),
                         new SourceProvenance(
-                                RepositoryUrlSanitizer.sanitize(workspace.repositoryUrl()),
+                                UrlSanitizer.sanitize(workspace.repositoryUrl()),
                                 workspace.revision(),
                                 relativePath)));
             } catch (IllegalArgumentException exception) {

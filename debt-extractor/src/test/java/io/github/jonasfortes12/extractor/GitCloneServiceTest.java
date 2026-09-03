@@ -5,6 +5,7 @@ import io.github.jonasfortes12.core.model.RepositoryRequest;
 import io.github.jonasfortes12.core.model.RepositoryWorkspace;
 import io.github.jonasfortes12.core.model.SourceProvenance;
 import io.github.jonasfortes12.core.port.RepositoryWorkspaceProvider;
+import io.github.jonasfortes12.core.util.UrlSanitizer;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.ObjectId;
 import org.junit.jupiter.api.Assumptions;
@@ -103,7 +104,7 @@ class GitCloneServiceTest {
     @Test
     void sanitizesUserInfoQueryAndFragmentBeforeReportMetadata() {
         String rawUrl = "https://user:pass@host/repo.git?token=secret#fragment";
-        String sanitizedUrl = RepositoryUrlSanitizer.sanitize(rawUrl);
+        String sanitizedUrl = UrlSanitizer.sanitize(rawUrl);
         RepositoryWorkspace workspace = new RepositoryWorkspace(Path.of("workspace"), sanitizedUrl, null);
         SourceProvenance provenance = new SourceProvenance(sanitizedUrl, null, "src/Example.java");
 
@@ -118,12 +119,12 @@ class GitCloneServiceTest {
     }
 
     @Test
-    void stripsQueryAndFragmentFromOpaqueFallback() {
+    void redactsAnOpaqueUrlGenericallyEvenWithoutCredentials() {
         String rawUrl = "https:repo.git?token=secret#fragment";
 
-        String sanitizedUrl = RepositoryUrlSanitizer.sanitize(rawUrl);
+        String sanitizedUrl = UrlSanitizer.sanitize(rawUrl);
 
-        assertEquals("https:repo.git", sanitizedUrl);
+        assertEquals("[redacted URL]", sanitizedUrl);
         assertFalse(sanitizedUrl.contains("token"));
         assertFalse(sanitizedUrl.contains("fragment"));
     }
@@ -132,7 +133,7 @@ class GitCloneServiceTest {
     void stripsCredentialsFromOpaqueFallback() {
         String rawUrl = "https:user:pass@host/repo.git?token=secret#fragment";
 
-        String sanitizedUrl = RepositoryUrlSanitizer.sanitize(rawUrl);
+        String sanitizedUrl = UrlSanitizer.sanitize(rawUrl);
 
         assertEquals("host/repo.git", sanitizedUrl);
         assertFalse(sanitizedUrl.contains("user"));
@@ -144,7 +145,7 @@ class GitCloneServiceTest {
     @Test
     void stripsCredentialFragmentsWhenPasswordContainsAt() {
         String rawUrl = "https:user:pa@ss@host/repo.git?token=x#fragment";
-        String sanitizedUrl = RepositoryUrlSanitizer.sanitize(rawUrl);
+        String sanitizedUrl = UrlSanitizer.sanitize(rawUrl);
         RepositoryWorkspace workspace = new RepositoryWorkspace(Path.of("workspace"), sanitizedUrl, null);
         SourceProvenance provenance = new SourceProvenance(sanitizedUrl, null, "src/Example.java");
 
@@ -165,7 +166,7 @@ class GitCloneServiceTest {
         for (String rawUrl : List.of(
                 "https:repo.git?token=QUERY_SECRET@query_leak#fragment",
                 "https:repo.git?token=fragment_secret#fragment@fragment_leak")) {
-            String sanitizedUrl = RepositoryUrlSanitizer.sanitize(rawUrl);
+            String sanitizedUrl = UrlSanitizer.sanitize(rawUrl);
             RepositoryWorkspace workspace = new RepositoryWorkspace(Path.of("workspace"), sanitizedUrl, null);
             SourceProvenance provenance = new SourceProvenance(sanitizedUrl, null, "src/Example.java");
 

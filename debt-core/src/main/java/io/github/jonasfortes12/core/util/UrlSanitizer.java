@@ -1,10 +1,10 @@
-package io.github.jonasfortes12.orchestrator.reporting;
+package io.github.jonasfortes12.core.util;
 
 import java.net.URI;
 
-public final class ReportUrlSanitizer {
+public final class UrlSanitizer {
 
-    private ReportUrlSanitizer() {
+    private UrlSanitizer() {
     }
 
     public static String sanitize(String value) {
