@@ -24,6 +24,7 @@ import io.github.jonasfortes12.extractor.AstCommentExtractor;
 import io.github.jonasfortes12.extractor.GitCloneService;
 import io.github.jonasfortes12.orchestrator.application.PipelineApplicationService;
 import io.github.jonasfortes12.orchestrator.reporting.FileReportSink;
+import io.github.jonasfortes12.orchestrator.util.OrchestrationUtils;
 import io.github.jonasfortes12.tester.LlmConfig;
 import io.github.jonasfortes12.tester.TestGeneratorService;
 
@@ -103,12 +104,12 @@ public final class AppOrchestrator {
             throw new IllegalArgumentException("expected at most six optional arguments");
         }
         return new CliOptions(
-                argumentOrDefault(args, 0, DEFAULT_REPOSITORY_URL),
-                argumentOrDefault(args, 1, DEFAULT_BINARY_MODEL),
-                argumentOrDefault(args, 2, DEFAULT_MULTI_MODEL),
-                Path.of(argumentOrDefault(args, 3, DEFAULT_OUTPUT_DIRECTORY.toString())),
-                argumentOrDefault(args, 4, null),
-                argumentOrDefault(args, 5, null));
+                OrchestrationUtils.argumentOrDefault(args, 0, DEFAULT_REPOSITORY_URL),
+                OrchestrationUtils.argumentOrDefault(args, 1, DEFAULT_BINARY_MODEL),
+                OrchestrationUtils.argumentOrDefault(args, 2, DEFAULT_MULTI_MODEL),
+                Path.of(OrchestrationUtils.argumentOrDefault(args, 3, DEFAULT_OUTPUT_DIRECTORY.toString())),
+                OrchestrationUtils.argumentOrDefault(args, 4, null),
+                OrchestrationUtils.argumentOrDefault(args, 5, null));
     }
 
     public static String runIdFor(CliOptions options) {
@@ -130,7 +131,7 @@ public final class AppOrchestrator {
         String revision = workspace == null ? options.revision() : workspace.revision();
         String material = String.join("\n",
                 UrlSanitizer.sanitize(repositoryUrl),
-                valueOrEmpty(revision),
+                OrchestrationUtils.valueOrEmpty(revision),
                 options.binaryModelPath(),
                 modelDigest(options.binaryModelPath()),
                 options.multiModelPath(),
@@ -145,11 +146,7 @@ public final class AppOrchestrator {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")
                     .digest(material.getBytes(StandardCharsets.UTF_8));
-            StringBuilder runId = new StringBuilder(digest.length * 2);
-            for (byte value : digest) {
-                runId.append(String.format("%02x", value));
-            }
-            return runId.toString();
+            return OrchestrationUtils.toHexString(digest);
         } catch (NoSuchAlgorithmException impossible) {
             throw new IllegalStateException("SHA-256 is unavailable", impossible);
         }
@@ -270,10 +267,6 @@ public final class AppOrchestrator {
         return UrlSanitizer.sanitize(endpoint);
     }
 
-    private static String valueOrEmpty(String value) {
-        return value == null ? "" : value;
-    }
-
     private static String modelDigest(String modelPath) {
         try (InputStream input = Files.newInputStream(Path.of(modelPath))) {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -282,23 +275,9 @@ public final class AppOrchestrator {
             while ((read = input.read(buffer)) >= 0) {
                 digest.update(buffer, 0, read);
             }
-            return hex(digest.digest());
+            return OrchestrationUtils.toHexString(digest.digest());
         } catch (IOException | NoSuchAlgorithmException | RuntimeException ignored) {
             return "unavailable";
         }
-    }
-
-    private static String hex(byte[] digest) {
-        StringBuilder result = new StringBuilder(digest.length * 2);
-        for (byte value : digest) {
-            result.append(String.format("%02x", value));
-        }
-        return result.toString();
-    }
-
-    private static String argumentOrDefault(String[] args, int index, String defaultValue) {
-        return index < args.length && args[index] != null && !args[index].isBlank()
-                ? args[index]
-                : defaultValue;
     }
 }
