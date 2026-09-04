@@ -35,8 +35,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 public final class AppOrchestrator {
 
@@ -164,7 +164,7 @@ public final class AppOrchestrator {
                 new GitCloneService(),
                 new AstCommentExtractor(),
                 new WekaDebtHunterClassifier(options.binaryModelPath(), options.multiModelPath()),
-                new ContextHandler(new IssueReferenceExtractor(), List.of()),
+                new ContextHandler(new IssueReferenceExtractor(), Optional.empty()),
                 new TestGeneratorService(llmConfig),
                 (request, workspace) -> request.runId().equals(PipelineApplicationService.AUTOMATIC_RUN_ID)
                         ? runIdFor(options, llmConfig, workspace)
