@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -27,11 +28,11 @@ public final class ContextHandler implements ContextEnricher {
             "NOT_FOUND", "RATE_LIMITED", "UNAUTHORIZED");
 
     private final IssueReferenceExtractor referenceExtractor;
-    private final List<ContextProvider> providers;
+    private final Optional<ContextProvider> provider;
 
-    public ContextHandler(IssueReferenceExtractor referenceExtractor, List<ContextProvider> providers) {
+    public ContextHandler(IssueReferenceExtractor referenceExtractor, Optional<ContextProvider> provider) {
         this.referenceExtractor = Objects.requireNonNull(referenceExtractor, "referenceExtractor must not be null");
-        this.providers = List.copyOf(Objects.requireNonNull(providers, "providers must not be null"));
+        this.provider = Objects.requireNonNull(provider, "provider must not be null");
     }
 
     @Override
@@ -51,94 +52,104 @@ public final class ContextHandler implements ContextEnricher {
     private EnrichedSatdDebt enrichDebt(
             ClassifiedDebt debt, boolean enabled, List<PipelineError> stageErrors) {
         List<ExternalReference> references = referenceExtractor.extract(debt.candidate().comment());
+
         if (!enabled) {
             return new EnrichedSatdDebt(debt, null, references, ContextStatus.SKIPPED, List.of());
         }
-        if (references.isEmpty()) {
+        if (references.isEmpty() || provider.isEmpty()) {
             return new EnrichedSatdDebt(debt, null, references, ContextStatus.NOT_FOUND, List.of());
         }
 
-        List<PipelineError> providerErrors = new ArrayList<>();
+        List<PipelineError> referenceErrors = new ArrayList<>();
+        ProviderIdentity providerIdentity = validateProviderIdentity(debt, referenceErrors, stageErrors);
+        if (!providerIdentity.available()) {
+            return new EnrichedSatdDebt(debt, null, references, ContextStatus.FAILED, referenceErrors);
+        }
+        String providerId = providerIdentity.value();
+
         for (ExternalReference reference : references) {
-            for (ContextProvider provider : providers) {
-                boolean supported;
-                try {
-                    supported = provider.supports(reference);
-                } catch (RuntimeException ignored) {
-                    ProviderIdentity identity = providerIdentity(provider);
-                    if (!identity.available()) {
-                        PipelineError error = providerFailure(
-                                debt, identity.value(), "IDENTITY", "ID_FAILED", false);
-                        addError(providerErrors, stageErrors, error);
-                        return failed(debt, references, providerErrors);
-                    }
-                    PipelineError error = providerFailure(
-                            debt, identity.value(), "SUPPORTS", "SUPPORTS_FAILED");
-                    addError(providerErrors, stageErrors, error);
-                    if (!error.recoverable()) {
-                        return failed(debt, references, providerErrors);
-                    }
-                    continue;
+            if (!isReferenceSupportedByProvider(debt, reference, providerId, referenceErrors, stageErrors)) {
+                if (hasNonRecoverableError(referenceErrors)) {
+                    return failed(debt, references, referenceErrors);
                 }
-                if (!supported) {
-                    continue;
-                }
+                continue;
+            }
 
-                ProviderIdentity identity = providerIdentity(provider);
-                if (!identity.available()) {
-                    PipelineError error = providerFailure(
-                            debt, identity.value(), "IDENTITY", "ID_FAILED", false);
-                    addError(providerErrors, stageErrors, error);
-                    return failed(debt, references, providerErrors);
-                }
-                String providerId = identity.value();
-                ProviderResolution resolution;
-                try {
-                    resolution = provider.fetch(reference);
-                } catch (RuntimeException ignored) {
-                    PipelineError error = providerFailure(
-                            debt, providerId, "FETCH", "FETCH_FAILED");
-                    addError(providerErrors, stageErrors, error);
-                    if (!error.recoverable()) {
-                        return failed(debt, references, providerErrors);
-                    }
-                    continue;
-                }
-                if (resolution == null) {
-                    PipelineError error = providerFailure(
-                            debt, providerId, "FETCH", "NULL_RESOLUTION");
-                    addError(providerErrors, stageErrors, error);
-                    if (!error.recoverable()) {
-                        return failed(debt, references, providerErrors);
-                    }
-                    continue;
-                }
-                if (resolution.error() != null) {
-                    PipelineError error = sanitizeProviderError(debt, providerId, resolution.error());
-                    addError(providerErrors, stageErrors, error);
-                    if (!error.recoverable()) {
-                        return failed(debt, references, providerErrors);
-                    }
-                    continue;
-                }
-                if (resolution.isNotFound()) {
-                    continue;
-                }
-
-                ExternalTaskSpec task = resolution.task();
-                if (providerId == null || !task.provider().equals(providerId)) {
-                    PipelineError error = providerFailure(
-                            debt, providerId, "FETCH", "TASK_MISMATCH", false);
-                    addError(providerErrors, stageErrors, error);
-                    return failed(debt, references, providerErrors);
-                }
-                return new EnrichedSatdDebt(debt, task, references, ContextStatus.MATCHED, providerErrors);
+            ExternalTaskSpec task = fetchExternalTask(debt, reference, providerId, referenceErrors, stageErrors);
+            if (task != null) {
+                return new EnrichedSatdDebt(debt, task, references, ContextStatus.MATCHED, referenceErrors);
+            }
+            if (hasNonRecoverableError(referenceErrors)) {
+                return failed(debt, references, referenceErrors);
             }
         }
 
-        return providerErrors.isEmpty()
-                ? new EnrichedSatdDebt(debt, null, references, ContextStatus.NOT_FOUND, providerErrors)
-                : failed(debt, references, providerErrors);
+        return referenceErrors.isEmpty()
+                ? new EnrichedSatdDebt(debt, null, references, ContextStatus.NOT_FOUND, referenceErrors)
+                : failed(debt, references, referenceErrors);
+    }
+
+    private ProviderIdentity validateProviderIdentity(
+            ClassifiedDebt debt, List<PipelineError> referenceErrors, List<PipelineError> stageErrors) {
+        ProviderIdentity identity = providerIdentity(provider.get());
+        if (!identity.available()) {
+            PipelineError error = providerFailure(debt, identity.value(), "IDENTITY", "ID_FAILED", false);
+            addError(referenceErrors, stageErrors, error);
+        }
+        return identity;
+    }
+
+    private boolean isReferenceSupportedByProvider(
+            ClassifiedDebt debt, ExternalReference reference, String providerId,
+            List<PipelineError> referenceErrors, List<PipelineError> stageErrors) {
+        boolean supported;
+        try {
+            supported = provider.get().supports(reference);
+        } catch (RuntimeException ignored) {
+            PipelineError error = providerFailure(debt, providerId, "SUPPORTS", "SUPPORTS_FAILED");
+            addError(referenceErrors, stageErrors, error);
+            return false;
+        }
+        return supported;
+    }
+
+    private ExternalTaskSpec fetchExternalTask(
+            ClassifiedDebt debt, ExternalReference reference, String providerId,
+            List<PipelineError> referenceErrors, List<PipelineError> stageErrors) {
+        ProviderResolution resolution;
+        try {
+            resolution = provider.get().fetch(reference);
+        } catch (RuntimeException ignored) {
+            PipelineError error = providerFailure(debt, providerId, "FETCH", "FETCH_FAILED");
+            addError(referenceErrors, stageErrors, error);
+            return null;
+        }
+        if (resolution == null) {
+            PipelineError error = providerFailure(debt, providerId, "FETCH", "NULL_RESOLUTION");
+            addError(referenceErrors, stageErrors, error);
+            return null;
+        }
+        if (resolution.error() != null) {
+            PipelineError error = sanitizeProviderError(debt, providerId, resolution.error());
+            addError(referenceErrors, stageErrors, error);
+            return null;
+        }
+        if (resolution.isNotFound()) {
+            return null;
+        }
+
+        ExternalTaskSpec task = resolution.task();
+        if (!task.provider().equals(providerId)) {
+            PipelineError error = providerFailure(debt, providerId, "FETCH", "TASK_MISMATCH", false);
+            addError(referenceErrors, stageErrors, error);
+            return null;
+        }
+        return task;
+    }
+
+    private boolean hasNonRecoverableError(List<PipelineError> referenceErrors) {
+        return !referenceErrors.isEmpty()
+                && !referenceErrors.get(referenceErrors.size() - 1).recoverable();
     }
 
     private EnrichedSatdDebt failed(

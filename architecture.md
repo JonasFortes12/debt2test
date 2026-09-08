@@ -412,42 +412,43 @@ flowchart LR
 
 The orchestrator owns the sequence and correlation. No stage should invoke the next stage directly.
 
-## 10. Context Provider Chain
+## 10. Context Provider Resolution
 
-Context enrichment is intentionally extensible because issue references may be present in different places and different organizations use different tracking systems.
+`ContextHandler` (in `debt-context`) holds at most one configured `ContextProvider`, injected as `Optional<ContextProvider>`. There is currently no live provider registered by default (`AppOrchestrator` wires `Optional.empty()`), so enrichment resolves every reference to `CONTEXT_NOT_FOUND` until a real provider adapter (e.g. Jira) is registered.
 
 ```mermaid
 sequenceDiagram
     participant O as Orchestrator
     participant C as ContextEnricher
     participant R as ReferenceExtractor
-    participant J as JiraProvider
-    participant M as Mock/Other Provider
+    participant P as ContextProvider (optional)
 
     O->>C: enrich(classifiedDebt, contextConfig)
     C->>R: extract references(comment, source metadata)
     R-->>C: normalized references
-    C->>J: supports(reference)?
-    J-->>C: yes/no
-    alt Jira reference
-        C->>J: fetch(reference, credentials)
-        J-->>C: ExternalTaskSpec or provider error
-    else Other or no reference
-        C->>M: resolve(reference)
-        M-->>C: ExternalTaskSpec or unmatched
+    alt no references or no provider configured
+        C-->>O: EnrichedSatdDebt with CONTEXT_NOT_FOUND
+    else provider configured
+        C->>P: supports(reference)?
+        P-->>C: yes/no
+        alt reference supported
+            C->>P: fetch(reference, credentials)
+            P-->>C: ExternalTaskSpec or provider error
+        end
+        C-->>O: EnrichedSatdDebt with context status
     end
-    C-->>O: EnrichedSatdDebt with context status
 ```
 
 Provider resolution rules:
 
 1. Reference extraction is deterministic and testable without network access.
-2. Provider selection is based on normalized reference and configured provider priority.
+2. `ContextHandler` validates the configured provider's identity once per candidate, then walks the candidate's extracted references in order against that single provider until one matches, fails non-recoverably, or the references are exhausted.
 3. A provider must return normalized data or a typed failure.
 4. Authentication, rate limits, and HTTP details stay inside the provider adapter.
-5. A missing reference or missing ticket is a valid `CONTEXT_NOT_FOUND` outcome.
+5. A missing reference, a missing ticket, or no provider being configured is a valid `CONTEXT_NOT_FOUND` outcome.
 6. Provider failures must be visible in the result and must not silently become a successful match.
-7. The chain must support a mock provider for tests and offline demonstrations.
+7. `ContextProvider` must support a mock/fake implementation for tests and offline demonstrations.
+8. Resolving references from more than one tracking system at once (provider chaining/fallback) is an open extension point, not current behavior: it would require a composite `ContextProvider` adapter in `debt-context` (behind the same port), not changes to `ContextHandler` or `debt-core`.
 
 ## 11. Orchestration and Error Policy
 
@@ -616,7 +617,7 @@ Testing is organized around the module boundaries.
 ### 15.4 `debt-context`
 
 - Issue-key extraction tests for Jira-style keys, GitHub-style references, false positives, and multiple references.
-- Provider-chain tests using mock providers.
+- Single-provider resolution tests using a mock/fake `ContextProvider`.
 - HTTP contract tests for Jira using a local mock server.
 - Tests for unmatched, unauthorized, rate-limited, and malformed responses.
 
