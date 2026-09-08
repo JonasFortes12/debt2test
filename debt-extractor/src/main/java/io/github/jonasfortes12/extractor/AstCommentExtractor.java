@@ -6,6 +6,8 @@ import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.comments.Comment;
+import com.github.javaparser.ast.comments.LineComment;
 import io.github.jonasfortes12.core.model.ExtractionOptions;
 import io.github.jonasfortes12.core.model.PipelineError;
 import io.github.jonasfortes12.core.model.RepositoryWorkspace;
@@ -21,9 +23,15 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 
 public final class AstCommentExtractor implements SatdExtractor {
@@ -74,6 +82,9 @@ public final class AstCommentExtractor implements SatdExtractor {
             return;
         }
 
+        Set<Comment> attachedComments = attachedComments(compilationUnit);
+        Map<Integer, LineComment> lineCommentsByLine = lineCommentsByLine(compilationUnit);
+
         compilationUnit.findAll(MethodDeclaration.class).forEach(method -> {
             if (method.getComment().isEmpty()) {
                 return;
@@ -92,7 +103,7 @@ public final class AstCommentExtractor implements SatdExtractor {
                         relativePath,
                         methodName,
                         line,
-                        method.getComment().orElseThrow().getContent().trim(),
+                        methodComment(method, attachedComments, lineCommentsByLine),
                         method.toString(),
                         new SourceProvenance(
                                 UrlSanitizer.sanitize(workspace.repositoryUrl()),
@@ -107,6 +118,48 @@ public final class AstCommentExtractor implements SatdExtractor {
                         true));
             }
         });
+    }
+
+    /**
+     * Resolves a method's full SATD comment. JavaParser attaches at most one {@link Comment}
+     * per node, so when a comment is a stack of contiguous {@code //} lines, only the line
+     * closest to the method ends up as {@link MethodDeclaration#getComment()} and the earlier
+     * lines are silently unattached. This reassembles the full block by walking upward through
+     * unclaimed, line-contiguous {@link LineComment}s until it hits a line that has no comment
+     * or one already claimed by another node (e.g. a trailing comment on a preceding field).
+     */
+    private String methodComment(
+            MethodDeclaration method, Set<Comment> attachedComments, Map<Integer, LineComment> lineCommentsByLine) {
+        Comment comment = method.getComment().orElseThrow();
+        if (!comment.isLineComment()) {
+            return comment.getContent().trim();
+        }
+
+        Deque<String> block = new ArrayDeque<>();
+        block.addFirst(comment.getContent().trim());
+        int line = comment.getBegin().map(position -> position.line).orElseThrow() - 1;
+        LineComment precedingLine = lineCommentsByLine.get(line);
+        while (precedingLine != null && !attachedComments.contains(precedingLine)) {
+            block.addFirst(precedingLine.getContent().trim());
+            line--;
+            precedingLine = lineCommentsByLine.get(line);
+        }
+        return String.join("\n", block);
+    }
+
+    private Set<Comment> attachedComments(CompilationUnit compilationUnit) {
+        Set<Comment> attached = Collections.newSetFromMap(new IdentityHashMap<>());
+        compilationUnit.findAll(Node.class).forEach(node -> node.getComment().ifPresent(attached::add));
+        return attached;
+    }
+
+    private Map<Integer, LineComment> lineCommentsByLine(CompilationUnit compilationUnit) {
+        Map<Integer, LineComment> byLine = new HashMap<>();
+        compilationUnit.getAllContainedComments().stream()
+                .filter(Comment::isLineComment)
+                .map(Comment::asLineComment)
+                .forEach(lineComment -> lineComment.getBegin().ifPresent(position -> byLine.put(position.line, lineComment)));
+        return byLine;
     }
 
     private String declaringTypeName(MethodDeclaration method) {

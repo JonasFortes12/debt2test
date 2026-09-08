@@ -1,8 +1,22 @@
 package io.github.jonasfortes12.orchestrator;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Objects;
+import java.util.Optional;
+
 import io.github.jonasfortes12.classifier.WekaDebtHunterClassifier;
 import io.github.jonasfortes12.context.chain.ContextHandler;
 import io.github.jonasfortes12.context.extraction.IssueReferenceExtractor;
+import io.github.jonasfortes12.context.provider.ContextProvider;
+import io.github.jonasfortes12.context.provider.jira.JiraClient;
+import io.github.jonasfortes12.context.provider.jira.JiraConfig;
+import io.github.jonasfortes12.context.provider.jira.JiraContextProvider;
 import io.github.jonasfortes12.core.model.ClassificationOptions;
 import io.github.jonasfortes12.core.model.ContextRequest;
 import io.github.jonasfortes12.core.model.ExtractionOptions;
@@ -28,19 +42,9 @@ import io.github.jonasfortes12.orchestrator.util.OrchestrationUtils;
 import io.github.jonasfortes12.tester.LlmConfig;
 import io.github.jonasfortes12.tester.TestGeneratorService;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.Objects;
-import java.util.Optional;
-
 public final class AppOrchestrator {
 
-    private static final String DEFAULT_REPOSITORY_URL = "https://github.com/apache/dubbo";
+    private static final String DEFAULT_REPOSITORY_URL = "https://github.com/JonasFortes12/mock-debt-project";
     private static final String DEFAULT_BINARY_MODEL = "preTrainedModels/DHbinaryClassifier.model";
     private static final String DEFAULT_MULTI_MODEL = "preTrainedModels/DHmultiClassifier.model";
     private static final Path DEFAULT_OUTPUT_DIRECTORY = Path.of("output");
@@ -164,11 +168,20 @@ public final class AppOrchestrator {
                 new GitCloneService(),
                 new AstCommentExtractor(),
                 new WekaDebtHunterClassifier(options.binaryModelPath(), options.multiModelPath()),
-                new ContextHandler(new IssueReferenceExtractor(), Optional.empty()),
+                new ContextHandler(new IssueReferenceExtractor(), jiraContextProvider()),
                 new TestGeneratorService(llmConfig),
                 (request, workspace) -> request.runId().equals(PipelineApplicationService.AUTOMATIC_RUN_ID)
                         ? runIdFor(options, llmConfig, workspace)
                         : request.runId());
+    }
+
+    private static Optional<ContextProvider> jiraContextProvider() {
+        JiraConfig jiraConfig = new JiraConfig();
+        if (!jiraConfig.isConfigured()) {
+            return Optional.empty();
+        }
+        JiraClient client = new JiraClient(jiraConfig.getBaseUrl(), jiraConfig.getEmail(), jiraConfig.getApiToken());
+        return Optional.of(new JiraContextProvider(client));
     }
 
     public static PipelineApplicationService createApplication(

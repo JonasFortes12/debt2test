@@ -141,6 +141,57 @@ class AstCommentExtractorTest {
     }
 
     @Test
+    void stackedLineCommentsAreMergedIntoASingleCandidateComment() throws IOException, URISyntaxException {
+        Path root = copyFixtureProject(false);
+        Path sourceDirectory = root.resolve("src");
+        Files.writeString(sourceDirectory.resolve("StackedComment.java"), """
+                package fixture;
+                public class StackedComment {
+                    // DEBT2TEST-3: concurrent access isn't exercised here because the pool
+                    // lacks synchronization; a true concurrency test would be flaky by design.
+                    public void stacked() {}
+                }
+                """);
+
+        ExtractionResult result = new AstCommentExtractor().extract(
+                new RepositoryWorkspace(root, "repo", "main"),
+                new ExtractionOptions("run-1"));
+
+        SatdCandidate candidate = result.candidates().stream()
+                .filter(item -> item.methodName().equals("stacked"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(
+                "DEBT2TEST-3: concurrent access isn't exercised here because the pool\n"
+                        + "lacks synchronization; a true concurrency test would be flaky by design.",
+                candidate.comment());
+    }
+
+    @Test
+    void stackedLineCommentsDoNotAbsorbAPrecedingUnrelatedTrailingComment() throws IOException, URISyntaxException {
+        Path root = copyFixtureProject(false);
+        Path sourceDirectory = root.resolve("src");
+        Files.writeString(sourceDirectory.resolve("TrailingComment.java"), """
+                package fixture;
+                public class TrailingComment {
+                    int x = 5; // trailing note about x, unrelated to the method below
+                    // TODO: only this line belongs to the method comment.
+                    public void afterTrailingComment() {}
+                }
+                """);
+
+        ExtractionResult result = new AstCommentExtractor().extract(
+                new RepositoryWorkspace(root, "repo", "main"),
+                new ExtractionOptions("run-1"));
+
+        SatdCandidate candidate = result.candidates().stream()
+                .filter(item -> item.methodName().equals("afterTrailingComment"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("TODO: only this line belongs to the method comment.", candidate.comment());
+    }
+
+    @Test
     void candidateIdsIncludeDeclaringTypeForSameLineMethods() throws IOException, URISyntaxException {
         Path root = copyFixtureProject(false);
         copyFixture("SameLineTypes.java", root.resolve("src/SameLineTypes.java"));
