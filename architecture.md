@@ -60,7 +60,7 @@ The initial runtime can remain a synchronous CLI. The application boundary must 
 
 ## 4. Target Repository Structure
 
-The target Maven reactor contains six modules:
+The target Maven reactor contains seven modules:
 
 ```text
 debt2test/
@@ -89,6 +89,15 @@ debt2test/
 │   └── src/main/java/.../tester/
 │       ├── prompt/
 │       └── provider/
+├── debt-persistence/
+│   ├── pom.xml
+│   ├── src/main/resources/db/migration/
+│   └── src/main/java/.../persistence/
+│       ├── entity/
+│       ├── repository/
+│       ├── mapper/
+│       ├── adapter/
+│       └── config/
 ├── debt-orchestrator/
 │   ├── pom.xml
 │   └── src/main/java/.../orchestrator/
@@ -113,11 +122,13 @@ graph TD
     CLASSIFIER[debt-classifier]
     CONTEXT[debt-context]
     TESTER[debt-tester]
+    PERSISTENCE[debt-persistence]
     ORCH[debt-orchestrator]
 
     EXTRACTOR --> CORE
     CLASSIFIER --> CORE
     CONTEXT --> CORE
+    PERSISTENCE --> CORE
     TESTER --> CORE
     ORCH --> CORE
     ORCH --> EXTRACTOR
@@ -253,6 +264,22 @@ Responsibilities:
 
 The former `MainPipeline` belongs here. It must not remain inside `debt-classifier`, because sequencing all stages is an application responsibility rather than a classification responsibility.
 
+### 6.7 `debt-persistence`
+
+The persistence module stores pipeline runs and their artifacts in a relational database.
+
+Responsibilities:
+
+- Implement the `PipelineRunStore` port, one transaction per lifecycle event.
+- Implement `ReportSink` as a secondary sink recording report artifact locations.
+- Own the Flyway-managed schema; Hibernate validates against it and never alters it.
+- Map immutable core records onto entities and back, preserving provenance and both status vocabularies.
+- Sanitize repository URLs before they reach a column, since a row is as durable as a log line.
+
+The module depends only on `debt-core`. It never calls the extractor, classifier, context, or
+tester modules, and no persistence type appears in `debt-core`. Persistence is disabled by
+default so the CLI and the default build require neither a database nor Docker.
+
 ## 7. Core Domain Model
 
 The following model is conceptual. Names and fields can be refined during implementation, but the relationships should remain stable.
@@ -373,6 +400,16 @@ TestGenerator
 
 ReportSink
     write(PipelineResult, ReportOptions) -> ReportArtifact
+
+PipelineRunStore
+    runStarted(executionId, PipelineRequest)
+    runIdResolved(executionId, runId)
+    workspaceReady(executionId, RepositoryWorkspace)
+    candidatesExtracted(executionId, List<SatdCandidate>)
+    candidatesClassified(executionId, List<ClassifiedDebt>)
+    contextEnriched(executionId, List<EnrichedSatdDebt>)
+    testsGenerated(executionId, List<GeneratedTest>)
+    runFinished(executionId, PipelineResult)
 ```
 
 The repository workspace provider may be part of `debt-extractor` if cloning and extraction are inseparable in the initial POC. If the project later needs multiple source acquisition mechanisms, the port can be split without changing downstream stages.
@@ -761,9 +798,9 @@ The assistant should be instructed to:
 The following decisions should be made in implementation plans rather than assumed silently:
 
 - Whether the repository workspace provider remains inside `debt-extractor` or becomes a separate adapter module.
-- Whether reports are written locally only or through a storage port for the future service.
+- ~~Whether reports are written locally only or through a storage port for the future service.~~ **Resolved:** both. `FileReportSink` stays the primary sink (it produces the paths `validArtifact` requires); `DatabaseReportSink` runs alongside it under `CompositeReportSink`.
 - Whether generated-test validation is a separate `debt-validator` module or an optional stage inside `debt-tester`.
-- Whether asynchronous execution requires a persistent run store or can initially use in-memory state.
+- ~~Whether asynchronous execution requires a persistent run store or can initially use in-memory state.~~ **Resolved:** a persistent run store. `debt-core` defines the `PipelineRunStore` port; `debt-persistence` implements it over PostgreSQL. See `docs/superpowers/specs/2026-09-08-database-persistence-layer-design.md`.
 - Whether Java 25 remains the supported build baseline. The current repository POM uses Java 25; Maven, VS Code, CI, and contributor documentation must agree on the selected version.
 - Whether raw provider payloads are retained for research reproducibility, and what redaction policy applies.
 
