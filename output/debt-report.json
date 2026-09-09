@@ -3,6 +3,13 @@
   "status": "COMPLETED_WITH_ERRORS",
   "errors": [
     {
+      "stage": "persistence",
+      "code": "PERSISTENCE_WRITE_FAILED",
+      "candidateId": null,
+      "recoverable": true,
+      "message": "pipeline error recorded"
+    },
+    {
       "stage": "extraction",
       "code": "JAVA_PARSE_FAILED",
       "candidateId": null,
@@ -12,6 +19,13 @@
     {
       "stage": "classification",
       "code": "CLASSIFIER_MODEL_FALLBACK",
+      "candidateId": null,
+      "recoverable": true,
+      "message": "pipeline error recorded"
+    },
+    {
+      "stage": "generation",
+      "code": "LLM_TRANSPORT_FAILED",
       "candidateId": null,
       "recoverable": true,
       "message": "pipeline error recorded"
@@ -121,7 +135,15 @@
         "strategy": "heuristic-fallback",
         "version": "unavailable"
       },
-      "errors": [],
+      "errors": [
+        {
+          "stage": "generation",
+          "code": "LLM_TRANSPORT_FAILED",
+          "candidateId": "6957795791cc0c461840e1f45e1740480694c171cf0c84b95846894b046dc88b:src/test/java/io/github/jonasfortes12/samples/debt/database/ConnectionPoolTest.java:32:5:shouldNotExceedPoolSizeOnRelease:ConnectionPoolTest:shouldNotExceedPoolSizeOnRelease()",
+          "recoverable": true,
+          "message": "pipeline error recorded"
+        }
+      ],
       "runId": "6957795791cc0c461840e1f45e1740480694c171cf0c84b95846894b046dc88b",
       "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
       "revision": "af45cc12f9901e09cca38fd9a51d1c82381a772f"

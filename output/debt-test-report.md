@@ -5,8 +5,10 @@ Generated test cases to pay off self-admitted technical debt (SATD).
 - **Run ID:** `6957795791cc0c461840e1f45e1740480694c171cf0c84b95846894b046dc88b`
 - **Status:** `COMPLETED_WITH_ERRORS`
 - **Errors:**
+  - `PERSISTENCE_WRITE_FAILED`
   - `JAVA_PARSE_FAILED`
   - `CLASSIFIER_MODEL_FALLBACK`
+  - `LLM_TRANSPORT_FAILED`
 
 ## LoginService.java -> authenticate()
 
@@ -42,7 +44,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
@@ -52,44 +55,42 @@ class LoginServiceTest {
 
     @BeforeEach
     void setUp() {
-        // Assuming LoginService can be instantiated or mocked for testing.
-        // If legacyMd5Hash and validateHash are private/protected or part of a class,
-        // adjust initialization accordingly. Here we assume a standard class structure.
+        // Create a partial mock or instance of LoginService to test the authenticate method
         loginService = Mockito.spy(new LoginService());
     }
 
     @Test
-    @DisplayName("Should return false when username is null or empty")
-    void testAuthenticateWithNullOrEmptyUsername() {
-        assertFalse(loginService.authenticate(null, "password123"));
-        assertFalse(loginService.authenticate("", "password123"));
+    @DisplayName("Should return false when username is null")
+    void testAuthenticateNullUsername() {
+        boolean result = loginService.authenticate(null, "password123");
+        assertFalse(result, "Authentication should fail for null username");
     }
 
     @Test
-    @DisplayName("Should successfully authenticate with valid credentials using the modern hashing scheme")
+    @DisplayName("Should return false when username is empty")
+    void testAuthenticateEmptyUsername() {
+        boolean result = loginService.authenticate("", "password123");
+        assertFalse(result, "Authentication should fail for empty username");
+    }
+
+    @Test
+    @DisplayName("Should return true when valid credentials are provided")
     void testAuthenticateSuccess() {
-        String username = "testUser";
-        String password = "securePassword123";
+        // Mock validateHash to return true for valid hash validation
+        Mockito.doReturn(true).when(loginService).validateHash(anyString(), anyString());
 
-        // Mocking the validation to return true for the expected hash
-        when(loginService.validateHash(eq(username), anyString())).thenReturn(true);
-
-        boolean result = loginService.authenticate(username, password);
-
-        assertTrue(result);
+        boolean result = loginService.authenticate("validUser", "correctPassword");
+        assertTrue(result, "Authentication should succeed with valid credentials");
     }
 
     @Test
-    @DisplayName("Should fail authentication with invalid credentials")
+    @DisplayName("Should return false when invalid credentials are provided")
     void testAuthenticateFailure() {
-        String username = "testUser";
-        String password = "wrongPassword";
+        // Mock validateHash to return false for invalid hash validation
+        Mockito.doReturn(false).when(loginService).validateHash(anyString(), anyString());
 
-        when(loginService.validateHash(eq(username), anyString())).thenReturn(false);
-
-        boolean result = loginService.authenticate(username, password);
-
-        assertFalse(result);
+        boolean result = loginService.authenticate("validUser", "wrongPassword");
+        assertFalse(result, "Authentication should fail with invalid credentials");
     }
 }
 ```
@@ -120,7 +121,9 @@ void shouldReportCorrectSize() {
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CacheManagerTest {
 
@@ -128,7 +131,8 @@ class CacheManagerTest {
 
     @BeforeEach
     void setUp() {
-        // Assuming a constructor or configuration method exists to set maxSize to 2
+        // Assuming a constructor or setter exists to configure max size, 
+        // e.g., CacheManager(int maxSize) or setting maxSize to 2 for testing eviction.
         cacheManager = new CacheManager<>(2);
     }
 
@@ -140,41 +144,23 @@ class CacheManagerTest {
     }
 
     @Test
-    void shouldEvictOldestElementWhenMaxSizeExceeded() {
-        // Given a cache with a max size of 2
+    void shouldEvictOldestElementUnderMemoryPressure() {
+        // Given a cache with maxSize = 2
         cacheManager.put("a", 1);
         cacheManager.put("b", 2);
-        assertEquals(2, cacheManager.size());
-
-        // When a third element is added exceeding the max size
-        cacheManager.put("c", 3);
-
-        // Then the size should remain capped at the maximum limit (2)
-        assertEquals(2, cacheManager.size());
-
-        // And the least recently used element ("a") should be evicted
-        assertNull(cacheManager.get("a"), "Evicted key 'a' should no longer be in the cache");
         
-        // While recently accessed or newer elements should remain
-        assertEquals(2, cacheManager.get("b"));
-        assertEquals(3, cacheManager.get("c"));
-    }
-
-    @Test
-    void shouldUpdateLRUOrderOnAccess() {
-        cacheManager.put("a", 1);
-        cacheManager.put("b", 2);
-
-        // Access "a" to make it the most recently used (so "b" becomes the least recently used)
-        cacheManager.get("a");
-
-        // Add "c", which should evict "b" instead of "a"
+        // When a third element is added exceeding the maxSize
         cacheManager.put("c", 3);
 
+        // Then the cache size should remain at maxSize (2)
         assertEquals(2, cacheManager.size());
-        assertEquals(1, cacheManager.get("a"));
-        assertNull(cacheManager.get("b"), "Evicted key 'b' should no longer be in the cache");
-        assertEquals(3, cacheManager.get("c"));
+
+        // And the least recently used element ("a") should be evicted, 
+        // while the recently accessed/added elements ("b" and "c") remain.
+        // Assuming there are methods like containsKey() or get() to check presence.
+        assertFalse(cacheManager.containsKey("a"), "Oldest element 'a' should be evicted");
+        assertTrue(cacheManager.containsKey("b"), "Element 'b' should still be in the cache");
+        assertTrue(cacheManager.containsKey("c"), "Newest element 'c' should be in the cache");
     }
 }
 ```
@@ -185,7 +171,7 @@ class CacheManagerTest {
 
 - **Debt Type:** `TEST`
 - **Line Number:** `32`
-- **Status:** `GENERATED`
+- **Status:** `GENERATION_FAILED`
 - **Comment:** `DEBT2TEST-3: concurrent access isn't exercised here because the pool lacks synchronization; a true concurrency test would be flaky by design.`
 
 ```java
@@ -203,95 +189,7 @@ void shouldNotExceedPoolSizeOnRelease() throws InterruptedException {
 ### Generated Test Case
 
 ```java
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.junit.jupiter.api.Assertions.*;
-
-class ConnectionPoolTest {
-
-    private ConnectionPool connectionPool;
-
-    @BeforeEach
-    void setUp() {
-        // Assuming a pool size of 10 for testing high concurrency
-        connectionPool = new ConnectionPool(10);
-    }
-
-    @Test
-    void shouldNotExceedPoolSizeOnRelease() throws InterruptedException {
-        ConnectionPool.DbConnection conn = connectionPool.getConnection();
-        connectionPool.releaseConnection(conn);
-        connectionPool.releaseConnection(conn);
-        
-        // Verify the pool remains functional and doesn't overfill beyond capacity
-        ConnectionPool.DbConnection freshConn = connectionPool.getConnection();
-        assertNotNull(freshConn);
-        connectionPool.releaseConnection(freshConn);
-    }
-
-    @Test
-    void shouldHandleConcurrentGetAndReleaseWithoutRaceConditions() throws InterruptedException {
-        int threadCount = 50;
-        int iterationsPerThread = 100;
-        ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
-        CountDownLatch startLatch = new CountDownLatch(1);
-        CountDownLatch endLatch = new CountDownLatch(threadCount);
-
-        // Track active unique connections to detect duplicate leases
-        Set<ConnectionPool.DbConnection> activeConnections = ConcurrentHashMap.newKeySet();
-        AtomicInteger failureCount = new AtomicInteger(0);
-
-        for (int i = 0; i < threadCount; i++) {
-            executorService.submit(() -> {
-                try {
-                    startLatch.await();
-                    for (int j = 0; j < iterationsPerThread; j++) {
-                        ConnectionPool.DbConnection connection = connectionPool.getConnection();
-                        if (connection == null) {
-                            failureCount.incrementAndGet();
-                            continue;
-                        }
-
-                        // Ensure the exact same connection instance isn't leased out concurrently
-                        if (!activeConnections.add(connection)) {
-                            failureCount.incrementAndGet(); // Duplicate lease detected!
-                        }
-
-                        // Simulate some work
-                        Thread.yield();
-
-                        boolean removed = activeConnections.remove(connection);
-                        if (!removed) {
-                            failureCount.incrementAndGet();
-                        }
-
-                        connectionPool.releaseConnection(connection);
-                    }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                } finally {
-                    endLatch.countDown();
-                }
-            });
-        }
-
-        startLatch.countDown(); // Trigger all threads simultaneously
-        boolean finished = endLatch.await(10, TimeUnit.SECONDS);
-        executorService.shutdownNow();
-
-        assertTrue(finished, "Concurrency test timed out");
-        assertEquals(0, failureCount.get(), "Race conditions detected: duplicate or lost connections during concurrent access.");
-    }
-}
 ```
 
 ---
@@ -320,36 +218,50 @@ void shouldFailOnNegativeAmountAfterRetries() {
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
 class PaymentProcessorTest {
 
     private PaymentConfig paymentConfig;
-    private GatewayClient gatewayClient;
+    private PaymentGateway paymentGateway;
     private PaymentProcessor paymentProcessor;
 
     @BeforeEach
     void setUp() {
-        paymentConfig = mock(PaymentConfig.class);
-        gatewayClient = mock(GatewayClient.class);
-        
-        // Configure short timeouts and low retry counts for fast, deterministic testing
-        when(paymentConfig.getGatewayTimeoutMs()).thenReturn(100);
-        when(paymentConfig.getMaxRetryAttempts()).thenReturn(3);
-
-        paymentProcessor = new PaymentProcessor(paymentConfig, gatewayClient);
+        // Using a short timeout for test efficiency and injecting configuration
+        paymentConfig = new PaymentConfig(100, 3);
+        paymentGateway = new MockPaymentGateway();
+        paymentProcessor = new PaymentProcessor(paymentConfig, paymentGateway);
     }
 
     @Test
     void shouldFailOnNegativeAmountAfterRetries() {
         PaymentProcessor.Order order = new PaymentProcessor.Order("order-2", -50.0);
-        
-        // Exercise the retry path directly using the injected configuration
         PaymentProcessor.PaymentResult result = paymentProcessor.process(order);
-        
         assertFalse(result.success());
-        // Verify that the retry mechanism respected the configured max attempts
-        verify(gatewayClient, times(3)).charge(any());
+    }
+
+    @Test
+    void shouldRetryOnGatewayTimeoutUsingInjectedConfiguration() {
+        // Configure a gateway that simulates timeouts/delays exceeding the injected timeout
+        PaymentGateway timingOutGateway = new PaymentGateway() {
+            @Override
+            public boolean charge(String orderId, double amount) {
+                try {
+                    // Simulate a delay longer than the 100ms configured timeout
+                    Thread.sleep(150);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                return false;
+            }
+        };
+
+        PaymentProcessor processorWithTimeout = new PaymentProcessor(paymentConfig, timingOutGateway);
+        PaymentProcessor.Order order = new PaymentProcessor.Order("order-timeout", 100.0);
+
+        PaymentProcessor.PaymentResult result = processorWithTimeout.process(order);
+
+        assertFalse(result.success());
     }
 }
 ```

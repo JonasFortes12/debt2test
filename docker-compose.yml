@@ -1,0 +1,16 @@
+# Local PostgreSQL for development. Not a deployment artifact.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: debt2test
+      POSTGRES_USER: debt2test
+      POSTGRES_PASSWORD: debt2test
+    ports:
+      # 5432/5433 are commonly taken by other local Postgres containers.
+      - "${DEBT_DB_PORT:-5434}:5432"
+    volumes:
+      - debt2test-pgdata:/var/lib/postgresql/data
+
+volumes:
+  debt2test-pgdata:

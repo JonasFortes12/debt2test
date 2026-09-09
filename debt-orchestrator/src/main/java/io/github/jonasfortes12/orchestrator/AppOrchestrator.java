@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -37,6 +38,9 @@ import io.github.jonasfortes12.core.util.UrlSanitizer;
 import io.github.jonasfortes12.extractor.AstCommentExtractor;
 import io.github.jonasfortes12.extractor.GitCloneService;
 import io.github.jonasfortes12.orchestrator.application.PipelineApplicationService;
+import io.github.jonasfortes12.core.port.PipelineRunStore;
+import io.github.jonasfortes12.orchestrator.persistence.PersistenceContext;
+import io.github.jonasfortes12.orchestrator.reporting.CompositeReportSink;
 import io.github.jonasfortes12.orchestrator.reporting.FileReportSink;
 import io.github.jonasfortes12.orchestrator.util.OrchestrationUtils;
 import io.github.jonasfortes12.tester.LlmConfig;
@@ -59,7 +63,11 @@ public final class AppOrchestrator {
     public static ExitCode executeFromCli(String[] args) {
         try {
             BootstrappedPipeline pipeline = CliBootstrapper.bootstrap(args);
-            return executePipeline(pipeline.options(), pipeline.application()::run);
+            try {
+                return executePipeline(pipeline.options(), pipeline.application()::run);
+            } finally {
+                pipeline.persistence().ifPresent(PersistenceContext::close);
+            }
         } catch (IllegalArgumentException ignored) {
             return reportFailure(ExitCode.INVALID_ARGUMENTS);
         } catch (RuntimeException ignored) {
@@ -161,18 +169,34 @@ public final class AppOrchestrator {
     }
 
     public static PipelineApplicationService createApplication(CliOptions options, LlmConfig llmConfig) {
+        return createApplication(options, llmConfig, Optional.empty());
+    }
+
+    public static PipelineApplicationService createApplication(
+            CliOptions options, LlmConfig llmConfig, Optional<PersistenceContext> persistence) {
         Objects.requireNonNull(options, "options must not be null");
         Objects.requireNonNull(llmConfig, "llmConfig must not be null");
-        return createApplication(
-                new FileReportSink(),
+        Objects.requireNonNull(persistence, "persistence must not be null");
+
+        ReportSink fileSink = new FileReportSink();
+        ReportSink reportSink = persistence
+                .map(context -> (ReportSink) new CompositeReportSink(fileSink, List.of(context.reportSink())))
+                .orElse(fileSink);
+        PipelineRunStore runStore = persistence
+                .map(PersistenceContext::runStore)
+                .orElse(PipelineRunStore.NO_OP);
+
+        return new PipelineApplicationService(
                 new GitCloneService(),
                 new AstCommentExtractor(),
                 new WekaDebtHunterClassifier(options.binaryModelPath(), options.multiModelPath()),
                 new ContextHandler(new IssueReferenceExtractor(), jiraContextProvider()),
                 new TestGeneratorService(llmConfig),
+                reportSink,
                 (request, workspace) -> request.runId().equals(PipelineApplicationService.AUTOMATIC_RUN_ID)
                         ? runIdFor(options, llmConfig, workspace)
-                        : request.runId());
+                        : request.runId(),
+                runStore);
     }
 
     private static Optional<ContextProvider> jiraContextProvider() {
