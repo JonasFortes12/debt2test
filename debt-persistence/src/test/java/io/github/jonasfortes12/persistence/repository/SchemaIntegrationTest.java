@@ -90,7 +90,20 @@ class SchemaIntegrationTest {
         run.setRunId("run-42");
         runs.saveAndFlush(run);
 
-        assertTrue(runs.findByRunId("run-42").isPresent());
+        assertTrue(runs.findFirstByRunIdOrderByStartedAtDesc("run-42").isPresent());
+    }
+
+    @Test
+    void repeatRunsOfTheSameConfigurationShareARunIdAcrossRows() {
+        PipelineRunEntity first = newRun();
+        first.setRunId("run-42");
+        runs.saveAndFlush(first);
+
+        PipelineRunEntity second = newRun();
+        second.setRunId("run-42");
+        runs.saveAndFlush(second);
+
+        assertEquals(2, runs.findAll().stream().filter(r -> "run-42".equals(r.getRunId())).count());
     }
 
     @Test

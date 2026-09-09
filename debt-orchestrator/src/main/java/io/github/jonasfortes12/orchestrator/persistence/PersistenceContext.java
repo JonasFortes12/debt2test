@@ -1,6 +1,8 @@
 package io.github.jonasfortes12.orchestrator.persistence;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
@@ -38,6 +40,11 @@ public final class PersistenceContext implements AutoCloseable {
 
     public static final String ENABLED_VARIABLE = "DEBT_PERSISTENCE_ENABLED";
 
+    /** Bound into the Spring datasource config; read through the same {@code environment}
+     * function as {@link #ENABLED_VARIABLE} so they can also come from a local {@code .env}. */
+    private static final List<String> DATASOURCE_VARIABLES =
+            List.of("DEBT_DB_URL", "DEBT_DB_USERNAME", "DEBT_DB_PASSWORD", "DEBT_DB_POOL_SIZE");
+
     /** Null when persistence was enabled but could not be started. */
     private final ConfigurableApplicationContext context;
 
@@ -56,18 +63,33 @@ public final class PersistenceContext implements AutoCloseable {
             return Optional.empty();
         }
         try {
-            ConfigurableApplicationContext started =
+            SpringApplicationBuilder builder =
                     new SpringApplicationBuilder(PersistenceConfiguration.class)
                             .web(WebApplicationType.NONE)
                             .profiles("persistence")
-                            .bannerMode(Banner.Mode.OFF)
-                            .run();
+                            .bannerMode(Banner.Mode.OFF);
+            Map<String, Object> datasourceOverrides = datasourceOverrides(environment);
+            if (!datasourceOverrides.isEmpty()) {
+                builder.properties(datasourceOverrides);
+            }
+            ConfigurableApplicationContext started = builder.run();
             return Optional.of(new PersistenceContext(started));
         } catch (Exception failure) {
             OrchestrationUtils.logPipeline(
                     "persistence is enabled but unavailable; continuing without it");
             return Optional.of(new PersistenceContext(null));
         }
+    }
+
+    private static Map<String, Object> datasourceOverrides(UnaryOperator<String> environment) {
+        Map<String, Object> overrides = new HashMap<>();
+        for (String variable : DATASOURCE_VARIABLES) {
+            String value = environment.apply(variable);
+            if (value != null && !value.isBlank()) {
+                overrides.put(variable, value);
+            }
+        }
+        return overrides;
     }
 
     public boolean isAvailable() {

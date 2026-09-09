@@ -14,7 +14,7 @@ import io.github.jonasfortes12.persistence.entity.TechnicalDebtEntity;
 
 public interface TechnicalDebtRepository extends JpaRepository<TechnicalDebtEntity, Long> {
 
-    // Underscore form is explicit about traversing run.id rather than a runId property.
+    /** Underscore form is explicit about traversing {@code run.id} rather than a {@code runId} property. */
     Page<TechnicalDebtEntity> findByRun_Id(UUID runId, Pageable pageable);
 
     Page<TechnicalDebtEntity> findByRun_IdAndSatd(UUID runId, boolean satd, Pageable pageable);

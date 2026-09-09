@@ -17,8 +17,10 @@ import io.github.jonasfortes12.persistence.repository.PipelineRunRepository;
  *
  * <p>Only the artifact paths: everything else was already stored by
  * {@link DatabasePipelineRunStore} during the run. {@code ReportSink.write} receives only a
- * {@link PipelineResult}, whose identifier is the domain run ID, so a run whose ID never
- * resolved simply has no paths recorded.
+ * {@link PipelineResult}, whose identifier is the domain run ID (a configuration fingerprint,
+ * not a row identity — repeat runs of the same configuration share it), so lookups take the
+ * most recently started matching row, and a run whose ID never resolved simply has no paths
+ * recorded.
  *
  * <p>Intended as a secondary behind {@code CompositeReportSink}, never as the primary: it
  * returns no file paths of its own, and pipeline artifact validation requires them.
@@ -39,7 +41,7 @@ public class DatabaseReportSink implements ReportSink {
         if (artifact == null) {
             return null;
         }
-        runs.findByRunId(result.runId()).ifPresent(run -> run.setReportPaths(
+        runs.findFirstByRunIdOrderByStartedAtDesc(result.runId()).ifPresent(run -> run.setReportPaths(
                 artifact.paths().stream()
                         .map(Path::toString)
                         .collect(Collectors.joining("\n"))));

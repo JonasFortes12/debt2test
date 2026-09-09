@@ -20,8 +20,12 @@ public class PipelineRunEntity {
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
 
-    /** The domain run ID. Null until resolved, which may be after workspace preparation. */
-    @Column(name = "run_id", unique = true)
+    /**
+     * The domain run ID: a content fingerprint of the run's configuration, not a row identity.
+     * Repeat runs of an identical configuration share the same value across multiple rows. Null
+     * until resolved, which may be after workspace preparation.
+     */
+    @Column(name = "run_id")
     private String runId;
 
     @Column(name = "repository_url", nullable = false, columnDefinition = "text")
