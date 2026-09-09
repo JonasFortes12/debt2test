@@ -34,7 +34,8 @@ public final class FileReportSink implements ReportSink {
     private static final String MARKDOWN_REPORT_NAME = "debt-test-report.md";
     private static final String REPORT_ERROR_MESSAGE = "pipeline error recorded";
     private static final Set<String> REPORT_STAGES = Set.of(
-            "repository", "extraction", "classification", "context", "generation", "orchestration", "report");
+            "repository", "extraction", "classification", "context", "generation", "orchestration",
+            "report", "persistence");
     private static final Set<String> REPORT_CODES = Set.of(
             "WORKSPACE_PREPARATION_FAILED", "WORKSPACE_CLEANUP_FAILED", "WORKSPACE_RELEASE_FAILED",
             "JAVA_TRAVERSAL_FAILED", "JAVA_PARSE_FAILED", "CANDIDATE_INVALID",
@@ -50,7 +51,8 @@ public final class FileReportSink implements ReportSink {
             "GENERATION_STAGE_FAILED", "GENERATION_RESULT_MISSING",
             "GENERATION_ERRORS_MISSING", "GENERATION_TESTS_MISSING",
             "REPORT_ARTIFACT_MISSING",
-            "REPORT_WRITE_FAILED", "RUN_ID_RESOLUTION_FAILED", "GENERATION_FAILED");
+            "REPORT_WRITE_FAILED", "RUN_ID_RESOLUTION_FAILED", "GENERATION_FAILED",
+            "PERSISTENCE_WRITE_FAILED");
     private static final java.util.regex.Pattern CONTEXT_PROVIDER_CODE = java.util.regex.Pattern.compile(
             "CONTEXT_PROVIDER_[A-Z][A-Z0-9_-]{0,31}_(?:ID_FAILED|SUPPORTS_FAILED|FETCH_FAILED|NULL_RESOLUTION|TASK_MISMATCH|NOT_FOUND|RATE_LIMITED|UNAUTHORIZED|UNKNOWN)");
 
