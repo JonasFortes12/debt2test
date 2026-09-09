@@ -32,7 +32,6 @@ import jakarta.persistence.PersistenceContext;
 @Tag("integration")
 @Testcontainers
 @DataJpaTest
-// The @DataJpaTest slice does not include Flyway, so the schema under test is the real migration.
 @ImportAutoConfiguration(FlywayAutoConfiguration.class)
 @ActiveProfiles("test")
 class SchemaIntegrationTest {
@@ -80,7 +79,6 @@ class SchemaIntegrationTest {
 
     @Test
     void hibernateValidatesAgainstTheFlywaySchema() {
-        // Reaching this test at all proves ddl-auto=validate accepted every entity mapping.
         assertTrue(runs.count() >= 0);
     }
 
@@ -143,8 +141,6 @@ class SchemaIntegrationTest {
         PipelineRunEntity run = runs.saveAndFlush(newRun());
         debts.saveAndFlush(newDebt(run, "candidate-1"));
 
-        // Detach first: this asserts the database's ON DELETE CASCADE, not Hibernate's
-        // in-memory graph, and a managed child would otherwise fail flush validation.
         entityManager.clear();
         runs.deleteById(run.getId());
         runs.flush();

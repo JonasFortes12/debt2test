@@ -169,8 +169,6 @@ public class DatabasePipelineRunStore implements PipelineRunStore {
                         && item.generatedTest().status() == ItemStatus.GENERATED)
                 .count());
 
-        // Errors are written only here, from the assembled result: the application service has
-        // already de-duplicated them, so the adapter needs no dedupe logic of its own.
         errors.deleteByRun_Id(run.getId());
         Map<String, TechnicalDebtEntity> byCandidate = debtsByCandidateId(run.getId());
         List<PipelineErrorEntity> rows = new ArrayList<>();
@@ -196,8 +194,6 @@ public class DatabasePipelineRunStore implements PipelineRunStore {
         return index;
     }
 
-    // ponytail: loads the run's debt rows per stage hook; fine at a few thousand candidates,
-    // switch to a projection + bulk UPDATE if extraction-hook latency becomes material.
     private Map<String, TechnicalDebtEntity> debtsByCandidateId(UUID runId) {
         Map<String, TechnicalDebtEntity> byCandidate = new LinkedHashMap<>();
         for (TechnicalDebtEntity debt : debts.findByRun_Id(runId, Pageable.unpaged()).getContent()) {

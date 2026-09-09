@@ -19,14 +19,6 @@ public final class OrchestrationUtils {
                 : defaultValue;
     }
 
-    public static String toHexString(byte[] digest) {
-        StringBuilder result = new StringBuilder(digest.length * 2);
-        for (byte value : digest) {
-            result.append(String.format("%02x", value));
-        }
-        return result.toString();
-    }
-
     public static void logPipeline(String message) {
         System.out.println("[pipeline] " + message);
     }

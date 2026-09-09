@@ -84,8 +84,6 @@ class RunStoreRoundTripIntegrationTest {
     @Autowired private GeneratedTestRepository tests;
     @Autowired private PipelineErrorRepository errors;
 
-    // --- fixtures ---------------------------------------------------------
-
     private static PipelineRequest request() {
         return new PipelineRequest(
                 "run-1",
@@ -169,8 +167,6 @@ class RunStoreRoundTripIntegrationTest {
         return new PipelineResult("run-1", RunStatus.COMPLETED_WITH_ERRORS, workspace(), items,
                 runErrors, null);
     }
-
-    // --- tests ------------------------------------------------------------
 
     @Test
     void aCompleteRunSurvivesARoundTrip() {
