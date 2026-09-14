@@ -138,6 +138,30 @@ class FileReportSinkTest {
         assertTrue(markdown.contains("line two"));
         assertFalse(markdown.contains("\n# injected"));
         assertTrue(markdown.contains("````` TODO: line one line two `single ``` triple ```` mixed é `````"));
+
+        assertEquals(3, occurrences(markdown, "### Ticket Context"));
+        assertTrue(markdown.contains("- **Status:** `MATCHED`"));
+        assertTrue(markdown.contains("- **Provider:** `jira`"));
+        assertTrue(markdown.contains("- **Key:** `TASK-7`"));
+        assertTrue(markdown.contains("- **URL:** `example.com:tasks/TASK-7`"));
+        assertTrue(markdown.contains("- **Labels:** `satd`"));
+        assertTrue(markdown.contains("- **Summary:** Save task"));
+        assertTrue(markdown.contains("**Description:**\n\n```\nDescription\n```"));
+        assertTrue(markdown.contains("**Acceptance Criteria:**\n\n- criterion"));
+        assertTrue(markdown.contains("**Issue References:**"));
+        assertTrue(markdown.contains("- `TASK-7` (source: `comment`)"));
+        assertTrue(markdown.contains("- `https://example.com/path` (source: `comment`)"));
+        assertTrue(markdown.contains("- `[redacted URL]` (source: `comment`)"));
+
+        assertTrue(markdown.contains("- **Status:** `NOT_FOUND`"));
+        assertTrue(markdown.contains("- **Key:** `TASK-FAIL`"));
+        assertEquals(2, occurrences(markdown, "- **Provider:**"));
+        assertEquals(2, occurrences(markdown, "- **Key:**"));
+        assertEquals(1, occurrences(markdown, "- **URL:**"));
+        assertEquals(1, occurrences(markdown, "- **Labels:**"));
+        assertEquals(1, occurrences(markdown, "**Description:**"));
+        assertEquals(1, occurrences(markdown, "**Acceptance Criteria:**"));
+        assertEquals(2, occurrences(markdown, "**Issue References:**"));
     }
 
     @Test
@@ -280,6 +304,16 @@ class FileReportSinkTest {
         assertFalse(report.toString().contains("Authorization"));
         assertFalse(report.toString().contains("hidden"));
         assertFalse(report.toString().contains("stack-trace"));
+    }
+
+    private static int occurrences(String haystack, String needle) {
+        int count = 0;
+        int index = 0;
+        while ((index = haystack.indexOf(needle, index)) != -1) {
+            count++;
+            index += needle.length();
+        }
+        return count;
     }
 
     private static JsonArray readJsonArray(Path file) throws Exception {

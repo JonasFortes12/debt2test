@@ -1,5 +1,5 @@
 {
-  "runId": "6957795791cc0c461840e1f45e1740480694c171cf0c84b95846894b046dc88b",
+  "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
   "status": "COMPLETED_WITH_ERRORS",
   "errors": [
     {
@@ -15,6 +15,13 @@
       "candidateId": null,
       "recoverable": true,
       "message": "pipeline error recorded"
+    },
+    {
+      "stage": "generation",
+      "code": "LLM_TRANSPORT_FAILED",
+      "candidateId": null,
+      "recoverable": true,
+      "message": "pipeline error recorded"
     }
   ],
   "items": [
@@ -27,7 +34,7 @@
       "isSatd": true,
       "debtType": "TEST",
       "confidence": null,
-      "candidateId": "6957795791cc0c461840e1f45e1740480694c171cf0c84b95846894b046dc88b:src/main/java/io/github/jonasfortes12/samples/debt/auth/LoginService.java:14:5:authenticate:LoginService:authenticate(String, String)",
+      "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/main/java/io/github/jonasfortes12/samples/debt/auth/LoginService.java:14:5:authenticate:LoginService:authenticate(String, String)",
       "contextStatus": "MATCHED",
       "issueReferences": [
         {
@@ -50,9 +57,45 @@
         "version": "unavailable"
       },
       "errors": [],
-      "runId": "6957795791cc0c461840e1f45e1740480694c171cf0c84b95846894b046dc88b",
+      "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
       "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-      "revision": "af45cc12f9901e09cca38fd9a51d1c82381a772f"
+      "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
+    },
+    {
+      "filePath": "src/main/java/io/github/jonasfortes12/samples/debt/database/OrderRepository.java",
+      "methodName": "findOrdersForCustomers",
+      "lineNumber": 15,
+      "comment": "TODO: DEBT2TEST-7\nWritten for a single-customer admin screen; issues one simulated query\nper customer ID. Never revisited when the bulk \"customer orders export\"\nfeature reused this method, where it now fires hundreds of queries\nper export (N+1). Should be a single batched IN (...) query.",
+      "methodSourceCode": "// TODO: DEBT2TEST-7\n// Written for a single-customer admin screen; issues one simulated query\n// per customer ID. Never revisited when the bulk \"customer orders export\"\n// feature reused this method, where it now fires hundreds of queries\n// per export (N+1). Should be a single batched IN (...) query.\npublic List\u003cString\u003e findOrdersForCustomers(List\u003cString\u003e customerIds) {\n    List\u003cString\u003e orders \u003d new ArrayList\u003c\u003e();\n    for (String customerId : customerIds) {\n        orders.addAll(findOrdersByCustomer(customerId));\n    }\n    return orders;\n}",
+      "isSatd": true,
+      "debtType": "TEST",
+      "confidence": null,
+      "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/main/java/io/github/jonasfortes12/samples/debt/database/OrderRepository.java:15:5:findOrdersForCustomers:OrderRepository:findOrdersForCustomers(List)",
+      "contextStatus": "MATCHED",
+      "issueReferences": [
+        {
+          "value": "DEBT2TEST-7",
+          "source": "comment"
+        }
+      ],
+      "externalTask": {
+        "provider": "jira",
+        "key": "DEBT2TEST-7",
+        "summary": "Batch OrderRepository customer lookups to remove N+1 queries",
+        "description": "OrderRepository.findOrdersForCustomers() loops over customer IDs and issues one simulated query per customer instead of a single batched lookup, causing an N+1 query pattern.\n\nDebt context (SATD): OrderRepository — TODO comment notes this was written for a single-customer admin screen and was never revisited when the bulk \"customer orders export\" feature reused it, where it now issues hundreds of queries per export.\n\nAcceptance Criteria:\n\n* Replace the per-ID loop with a single batched query (e.g., WHERE customer_id IN (...)).\n* findOrdersForCustomers() issues one query regardless of input size.\n* Test covers a multi-customer call and asserts the query/call count.",
+        "acceptanceCriteria": [],
+        "labels": [],
+        "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-7"
+      },
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "heuristic-fallback",
+        "version": "unavailable"
+      },
+      "errors": [],
+      "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
+      "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
+      "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
     },
     {
       "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/cache/CacheManagerTest.java",
@@ -63,7 +106,7 @@
       "isSatd": true,
       "debtType": "TEST",
       "confidence": null,
-      "candidateId": "6957795791cc0c461840e1f45e1740480694c171cf0c84b95846894b046dc88b:src/test/java/io/github/jonasfortes12/samples/debt/cache/CacheManagerTest.java:36:5:shouldReportCorrectSize:CacheManagerTest:shouldReportCorrectSize()",
+      "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/cache/CacheManagerTest.java:36:5:shouldReportCorrectSize:CacheManagerTest:shouldReportCorrectSize()",
       "contextStatus": "MATCHED",
       "issueReferences": [
         {
@@ -86,9 +129,9 @@
         "version": "unavailable"
       },
       "errors": [],
-      "runId": "6957795791cc0c461840e1f45e1740480694c171cf0c84b95846894b046dc88b",
+      "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
       "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-      "revision": "af45cc12f9901e09cca38fd9a51d1c82381a772f"
+      "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
     },
     {
       "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/database/ConnectionPoolTest.java",
@@ -99,7 +142,7 @@
       "isSatd": true,
       "debtType": "TEST",
       "confidence": null,
-      "candidateId": "6957795791cc0c461840e1f45e1740480694c171cf0c84b95846894b046dc88b:src/test/java/io/github/jonasfortes12/samples/debt/database/ConnectionPoolTest.java:32:5:shouldNotExceedPoolSizeOnRelease:ConnectionPoolTest:shouldNotExceedPoolSizeOnRelease()",
+      "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/database/ConnectionPoolTest.java:32:5:shouldNotExceedPoolSizeOnRelease:ConnectionPoolTest:shouldNotExceedPoolSizeOnRelease()",
       "contextStatus": "MATCHED",
       "issueReferences": [
         {
@@ -122,9 +165,89 @@
         "version": "unavailable"
       },
       "errors": [],
-      "runId": "6957795791cc0c461840e1f45e1740480694c171cf0c84b95846894b046dc88b",
+      "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
       "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-      "revision": "af45cc12f9901e09cca38fd9a51d1c82381a772f"
+      "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
+    },
+    {
+      "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/database/OrderRepositoryTest.java",
+      "methodName": "currentlyIssuesOneQueryPerCustomer",
+      "lineNumber": 25,
+      "comment": "DEBT2TEST-7: one query is issued per customer ID instead of a single\nbatched lookup, so the query count scales linearly with input size.",
+      "methodSourceCode": "// DEBT2TEST-7: one query is issued per customer ID instead of a single\n// batched lookup, so the query count scales linearly with input size.\n@Test\nvoid currentlyIssuesOneQueryPerCustomer() {\n    orderRepository.findOrdersForCustomers(List.of(\"c1\", \"c2\", \"c3\"));\n    assertEquals(3, orderRepository.getQueryCount());\n}",
+      "isSatd": true,
+      "debtType": "TEST",
+      "confidence": null,
+      "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/database/OrderRepositoryTest.java:25:5:currentlyIssuesOneQueryPerCustomer:OrderRepositoryTest:currentlyIssuesOneQueryPerCustomer()",
+      "contextStatus": "MATCHED",
+      "issueReferences": [
+        {
+          "value": "DEBT2TEST-7",
+          "source": "comment"
+        }
+      ],
+      "externalTask": {
+        "provider": "jira",
+        "key": "DEBT2TEST-7",
+        "summary": "Batch OrderRepository customer lookups to remove N+1 queries",
+        "description": "OrderRepository.findOrdersForCustomers() loops over customer IDs and issues one simulated query per customer instead of a single batched lookup, causing an N+1 query pattern.\n\nDebt context (SATD): OrderRepository — TODO comment notes this was written for a single-customer admin screen and was never revisited when the bulk \"customer orders export\" feature reused it, where it now issues hundreds of queries per export.\n\nAcceptance Criteria:\n\n* Replace the per-ID loop with a single batched query (e.g., WHERE customer_id IN (...)).\n* findOrdersForCustomers() issues one query regardless of input size.\n* Test covers a multi-customer call and asserts the query/call count.",
+        "acceptanceCriteria": [],
+        "labels": [],
+        "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-7"
+      },
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "heuristic-fallback",
+        "version": "unavailable"
+      },
+      "errors": [
+        {
+          "stage": "generation",
+          "code": "LLM_TRANSPORT_FAILED",
+          "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/database/OrderRepositoryTest.java:25:5:currentlyIssuesOneQueryPerCustomer:OrderRepositoryTest:currentlyIssuesOneQueryPerCustomer()",
+          "recoverable": true,
+          "message": "pipeline error recorded"
+        }
+      ],
+      "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
+      "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
+      "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
+    },
+    {
+      "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/logging/AuditLoggerTest.java",
+      "methodName": "currentlyLogsSensitiveFieldsInPlaintext",
+      "lineNumber": 24,
+      "comment": "DEBT2TEST-6: logged entries currently contain the raw password and\ncard number in plaintext because there is no redaction step yet.",
+      "methodSourceCode": "// DEBT2TEST-6: logged entries currently contain the raw password and\n// card number in plaintext because there is no redaction step yet.\n@Test\nvoid currentlyLogsSensitiveFieldsInPlaintext() {\n    auditLogger.logRequest(new AuditLogger.Request(\"alice\", \"s3cr3t\", \"4111111111111111\"));\n    String entry \u003d auditLogger.getLoggedEntries().get(0);\n    assertTrue(entry.contains(\"s3cr3t\"));\n    assertTrue(entry.contains(\"4111111111111111\"));\n}",
+      "isSatd": true,
+      "debtType": "TEST",
+      "confidence": null,
+      "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/logging/AuditLoggerTest.java:24:5:currentlyLogsSensitiveFieldsInPlaintext:AuditLoggerTest:currentlyLogsSensitiveFieldsInPlaintext()",
+      "contextStatus": "MATCHED",
+      "issueReferences": [
+        {
+          "value": "DEBT2TEST-6",
+          "source": "comment"
+        }
+      ],
+      "externalTask": {
+        "provider": "jira",
+        "key": "DEBT2TEST-6",
+        "summary": "Redact sensitive data from audit logs",
+        "description": "AuditLogger.logRequest() writes full request objects to the log via toString(), including raw passwords and credit card numbers, in plaintext.\n\nDebt context (SATD): AuditLogger — FIXME comment flags this as a compliance risk (PCI-DSS/GDPR) introduced during the 2023 audit-trail rollout, since logs are shipped to a third-party aggregator.\n\nAcceptance Criteria:\n\n* Introduce a redaction step (field allowlist or masking) before any object is logged.\n* Sensitive fields (password, cardNumber, ssn, etc.) never reach the log sink in plaintext.\n* Unit test asserts logged output does not contain raw sensitive values.",
+        "acceptanceCriteria": [],
+        "labels": [],
+        "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-6"
+      },
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "heuristic-fallback",
+        "version": "unavailable"
+      },
+      "errors": [],
+      "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
+      "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
+      "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
     },
     {
       "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/payment/PaymentProcessorTest.java",
@@ -135,7 +258,7 @@
       "isSatd": true,
       "debtType": "TEST",
       "confidence": null,
-      "candidateId": "6957795791cc0c461840e1f45e1740480694c171cf0c84b95846894b046dc88b:src/test/java/io/github/jonasfortes12/samples/debt/payment/PaymentProcessorTest.java:24:5:shouldFailOnNegativeAmountAfterRetries:PaymentProcessorTest:shouldFailOnNegativeAmountAfterRetries()",
+      "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/payment/PaymentProcessorTest.java:24:5:shouldFailOnNegativeAmountAfterRetries:PaymentProcessorTest:shouldFailOnNegativeAmountAfterRetries()",
       "contextStatus": "MATCHED",
       "issueReferences": [
         {
@@ -158,9 +281,9 @@
         "version": "unavailable"
       },
       "errors": [],
-      "runId": "6957795791cc0c461840e1f45e1740480694c171cf0c84b95846894b046dc88b",
+      "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
       "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-      "revision": "af45cc12f9901e09cca38fd9a51d1c82381a772f"
+      "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
     }
   ]
 }
