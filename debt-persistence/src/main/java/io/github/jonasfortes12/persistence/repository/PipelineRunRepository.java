@@ -14,9 +14,9 @@ import io.github.jonasfortes12.persistence.entity.PipelineRunEntity;
 public interface PipelineRunRepository extends JpaRepository<PipelineRunEntity, UUID> {
 
     /**
-     * run_id is a fingerprint, not a unique key: repeat runs of an identical configuration share
-     * it across rows. This returns the most recently started matching row, which is always the
-     * caller's own in-flight run.
+     * params_run_id is a fingerprint, not a unique key: repeat runs of an identical configuration
+     * share it across rows. This returns the most recently started matching row, which is always
+     * the caller's own in-flight run.
      */
     Optional<PipelineRunEntity> findFirstByRunIdOrderByStartedAtDesc(String runId);
 

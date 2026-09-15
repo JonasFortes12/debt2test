@@ -41,7 +41,7 @@ import io.github.jonasfortes12.persistence.repository.TechnicalDebtRepository;
  * connection open across LLM calls would leak a resource for no benefit. The cost is that a
  * crashed run leaves its row in RUNNING, which a future reconciliation sweep can pick up.
  *
- * <p>Every hook is idempotent, keyed by the (run_id, candidate_id) unique constraint, so
+ * <p>Every hook is idempotent, keyed by the (pipeline_run_id, candidate_id) unique constraint, so
  * replaying a stage never duplicates rows.
  */
 @Component

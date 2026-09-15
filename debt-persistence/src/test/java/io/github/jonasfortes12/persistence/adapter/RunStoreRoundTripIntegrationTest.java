@@ -257,7 +257,7 @@ class RunStoreRoundTripIntegrationTest {
         store.candidatesExtracted(executionId, List.of(matchedCandidate()));
         store.candidatesExtracted(executionId, List.of(matchedCandidate()));
 
-        assertEquals(1, debts.count(), "the (run_id, candidate_id) key makes hooks idempotent");
+        assertEquals(1, debts.count(), "the (pipeline_run_id, candidate_id) key makes hooks idempotent");
     }
 
     @Test

@@ -25,7 +25,7 @@ public class PipelineRunEntity {
      * Repeat runs of an identical configuration share the same value across multiple rows. Null
      * until resolved, which may be after workspace preparation.
      */
-    @Column(name = "run_id")
+    @Column(name = "params_run_id")
     private String runId;
 
     @Column(name = "repository_url", nullable = false, columnDefinition = "text")

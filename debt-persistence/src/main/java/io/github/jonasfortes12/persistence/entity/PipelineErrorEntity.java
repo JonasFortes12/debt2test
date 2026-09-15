@@ -22,7 +22,7 @@ public class PipelineErrorEntity {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "run_id", nullable = false)
+    @JoinColumn(name = "pipeline_run_id", nullable = false)
     private PipelineRunEntity run;
 
     /** Null for run-level errors. */

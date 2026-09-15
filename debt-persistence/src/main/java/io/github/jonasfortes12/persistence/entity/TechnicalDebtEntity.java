@@ -23,7 +23,7 @@ import jakarta.persistence.UniqueConstraint;
     name = "technical_debt",
     uniqueConstraints = @UniqueConstraint(
         name = "uq_technical_debt_candidate",
-        columnNames = {"run_id", "candidate_id"}))
+        columnNames = {"pipeline_run_id", "candidate_id"}))
 public class TechnicalDebtEntity {
 
     @Id
@@ -31,7 +31,7 @@ public class TechnicalDebtEntity {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "run_id", nullable = false)
+    @JoinColumn(name = "pipeline_run_id", nullable = false)
     private PipelineRunEntity run;
 
     @Column(name = "candidate_id", nullable = false)
