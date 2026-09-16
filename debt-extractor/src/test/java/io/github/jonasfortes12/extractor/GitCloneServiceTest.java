@@ -1,34 +1,34 @@
 package io.github.jonasfortes12.extractor;
 
-import io.github.jonasfortes12.core.error.PipelineException;
-import io.github.jonasfortes12.core.model.RepositoryRequest;
-import io.github.jonasfortes12.core.model.RepositoryWorkspace;
-import io.github.jonasfortes12.core.model.SourceProvenance;
-import io.github.jonasfortes12.core.port.RepositoryWorkspaceProvider;
-import io.github.jonasfortes12.core.util.UrlSanitizer;
-import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.lib.ObjectId;
-import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermission;
-import java.util.Comparator;
-import java.util.EnumSet;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+
+import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.lib.ObjectId;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import io.github.jonasfortes12.core.error.PipelineException;
+import io.github.jonasfortes12.core.model.RepositoryRequest;
+import io.github.jonasfortes12.core.model.RepositoryWorkspace;
+import io.github.jonasfortes12.core.model.SourceProvenance;
+import io.github.jonasfortes12.core.port.RepositoryWorkspaceProvider;
+import io.github.jonasfortes12.core.util.UrlSanitizer;
 
 class GitCloneServiceTest {
 
@@ -91,8 +91,8 @@ class GitCloneServiceTest {
         Set<Path> before = cloneDirectories(cloneParent);
         String invalidRepository = "file:///definitely-missing-repository?token=secret";
 
-        PipelineException exception = assertThrows(PipelineException.class, () ->
-                service.prepare(new RepositoryRequest(invalidRepository, "main")));
+        PipelineException exception = assertThrows(PipelineException.class,
+                () -> service.prepare(new RepositoryRequest(invalidRepository, "main")));
 
         assertEquals("WORKSPACE_PREPARATION_FAILED", exception.error().code());
         assertFalse(exception.error().recoverable());
@@ -109,8 +109,8 @@ class GitCloneServiceTest {
         SourceProvenance provenance = new SourceProvenance(sanitizedUrl, null, "src/Example.java");
 
         assertEquals("https://host/repo.git", sanitizedUrl);
-        for (String value : new String[]{sanitizedUrl, workspace.repositoryUrl(), provenance.repositoryUrl(),
-                workspace.toString(), provenance.toString()}) {
+        for (String value : new String[] { sanitizedUrl, workspace.repositoryUrl(), provenance.repositoryUrl(),
+                workspace.toString(), provenance.toString() }) {
             assertFalse(value.contains("user"));
             assertFalse(value.contains("pass"));
             assertFalse(value.contains("token"));
@@ -150,8 +150,8 @@ class GitCloneServiceTest {
         SourceProvenance provenance = new SourceProvenance(sanitizedUrl, null, "src/Example.java");
 
         assertEquals("host/repo.git", sanitizedUrl);
-        for (String value : new String[]{sanitizedUrl, workspace.repositoryUrl(), provenance.repositoryUrl(),
-                workspace.toString(), provenance.toString()}) {
+        for (String value : new String[] { sanitizedUrl, workspace.repositoryUrl(), provenance.repositoryUrl(),
+                workspace.toString(), provenance.toString() }) {
             assertFalse(value.contains("user"));
             assertFalse(value.contains("pa@ss"));
             assertFalse(value.contains("ss@host"));
@@ -171,8 +171,8 @@ class GitCloneServiceTest {
             SourceProvenance provenance = new SourceProvenance(sanitizedUrl, null, "src/Example.java");
 
             assertEquals("https:repo.git", sanitizedUrl);
-            for (String value : new String[]{sanitizedUrl, workspace.repositoryUrl(), provenance.repositoryUrl(),
-                    workspace.toString(), provenance.toString()}) {
+            for (String value : new String[] { sanitizedUrl, workspace.repositoryUrl(), provenance.repositoryUrl(),
+                    workspace.toString(), provenance.toString() }) {
                 assertFalse(value.contains("QUERY_SECRET"));
                 assertFalse(value.contains("query_leak"));
                 assertFalse(value.contains("fragment_secret"));
@@ -198,8 +198,7 @@ class GitCloneServiceTest {
         Files.setPosixFilePermissions(workspaceRoot, readOnly);
 
         try {
-            PipelineException exception = assertThrows(PipelineException.class, () ->
-                    service.release(workspace));
+            PipelineException exception = assertThrows(PipelineException.class, () -> service.release(workspace));
 
             assertEquals("WORKSPACE_CLEANUP_FAILED", exception.error().code());
             assertFalse(exception.error().recoverable());
@@ -248,8 +247,8 @@ class GitCloneServiceTest {
             throw new IOException("injected clone failure");
         });
 
-        PipelineException exception = assertThrows(PipelineException.class, () ->
-                service.prepare(new RepositoryRequest("file:///invalid", "main")));
+        PipelineException exception = assertThrows(PipelineException.class,
+                () -> service.prepare(new RepositoryRequest("file:///invalid", "main")));
 
         Path partialWorkspace = failedRoot.get();
         assertNotNull(partialWorkspace);
@@ -316,31 +315,6 @@ class GitCloneServiceTest {
         }
     }
 
-    private void deleteRecursively(Path root) throws IOException {
-        if (root == null || !Files.exists(root)) {
-            return;
-        }
-        try (var paths = Files.walk(root)) {
-            paths.sorted(Comparator.reverseOrder()).forEach(path -> {
-                try {
-                    Files.deleteIfExists(path);
-                } catch (IOException exception) {
-                    throw new DeleteFailure(exception);
-                }
-            });
-        } catch (DeleteFailure failure) {
-            throw failure.exception;
-        }
-    }
-
     private record LocalRepository(Path path, String firstCommit, String secondCommit) {
-    }
-
-    private static final class DeleteFailure extends RuntimeException {
-        private final IOException exception;
-
-        private DeleteFailure(IOException exception) {
-            this.exception = exception;
-        }
     }
 }

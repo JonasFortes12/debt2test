@@ -86,10 +86,12 @@ cp .env.example .env
 
 ## Running the CLI
 
-No `exec` plugin is declared on any module's `pom.xml`, so invoke it by full plugin coordinates from the repo root:
+No `exec` plugin is declared on any module's `pom.xml`, so invoke it by full plugin coordinates. Because `exec:java` isn't bound to a lifecycle phase, running it with `-am` executes it once per reactor module — including the root aggregator POM, which fails first since it has no classpath. Install the reactor once, then run `exec:java` scoped to just `debt-orchestrator` (no `-am`):
 
 ```bash
-mvn -pl debt-orchestrator -am compile org.codehaus.mojo:exec-maven-plugin:3.1.0:java \
+mvn install
+
+mvn -pl debt-orchestrator compile org.codehaus.mojo:exec-maven-plugin:3.1.0:java \
   -Dexec.mainClass=io.github.jonasfortes12.orchestrator.AppOrchestrator \
   -Dexec.args="<repositoryUrl> <binaryModelPath> <multiModelPath> <outputDirectory> <runId> <revision>"
 ```
@@ -108,14 +110,14 @@ All arguments are positional and optional — each falls back to a default if om
 ### Example: run against the default repository with pretrained models
 
 ```bash
-mvn -pl debt-orchestrator -am compile org.codehaus.mojo:exec-maven-plugin:3.1.0:java \
+mvn -pl debt-orchestrator compile org.codehaus.mojo:exec-maven-plugin:3.1.0:java \
   -Dexec.mainClass=io.github.jonasfortes12.orchestrator.AppOrchestrator
 ```
 
 ### Example: run against a specific repository and output directory
 
 ```bash
-mvn -pl debt-orchestrator -am compile org.codehaus.mojo:exec-maven-plugin:3.1.0:java \
+mvn -pl debt-orchestrator compile org.codehaus.mojo:exec-maven-plugin:3.1.0:java \
   -Dexec.mainClass=io.github.jonasfortes12.orchestrator.AppOrchestrator \
   -Dexec.args="https://github.com/apache/commons-lang preTrainedModels/DHbinaryClassifier.model preTrainedModels/DHmultiClassifier.model output/commons-lang"
 ```

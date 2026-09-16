@@ -14,7 +14,7 @@ import com.google.gson.JsonParser;
 
 final class LlmProviderSupport {
 
-    // Fixed bounds keep provider calls from hanging indefinitely without adding runtime config surface.
+    /** Fixed bounds keep provider calls from hanging indefinitely without adding runtime config surface. */
     static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
     static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
 

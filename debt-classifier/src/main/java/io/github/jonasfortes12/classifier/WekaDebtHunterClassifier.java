@@ -28,7 +28,7 @@ public class WekaDebtHunterClassifier implements DebtClassifier {
     private static final String SATD_LABEL = "SATD";
     private static final List<String> BINARY_CLASS_VALUES =
             List.of("SATD", "WITHOUT_CLASSIFICATION");
-    // These values mirror the class order in the bundled DebtHunter model metadata.
+    /** Mirrors the class order in the bundled DebtHunter model metadata. */
     private static final List<String> DEBT_TYPE_VALUES =
             List.of("DESIGN", "TEST", "DOCUMENTATION", "IMPLEMENTATION", "DEFECT");
 

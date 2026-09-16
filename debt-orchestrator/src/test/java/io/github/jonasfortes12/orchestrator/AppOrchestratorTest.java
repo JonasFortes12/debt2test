@@ -35,7 +35,7 @@ class AppOrchestratorTest {
     @Test
     void parsesDefaultAndPositionalCliValues() {
         AppOrchestrator.CliOptions defaults = AppOrchestrator.parseArguments(new String[0]);
-        assertEquals("https://github.com/apache/dubbo", defaults.repositoryUrl());
+        assertEquals("https://github.com/JonasFortes12/mock-debt-project", defaults.repositoryUrl());
         assertEquals("preTrainedModels/DHbinaryClassifier.model", defaults.binaryModelPath());
         assertEquals("preTrainedModels/DHmultiClassifier.model", defaults.multiModelPath());
         assertEquals(Path.of("output"), defaults.outputDirectory());

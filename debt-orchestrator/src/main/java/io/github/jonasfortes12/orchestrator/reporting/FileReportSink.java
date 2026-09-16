@@ -34,7 +34,8 @@ public final class FileReportSink implements ReportSink {
     private static final String MARKDOWN_REPORT_NAME = "debt-test-report.md";
     private static final String REPORT_ERROR_MESSAGE = "pipeline error recorded";
     private static final Set<String> REPORT_STAGES = Set.of(
-            "repository", "extraction", "classification", "context", "generation", "orchestration", "report");
+            "repository", "extraction", "classification", "context", "generation", "orchestration",
+            "report", "persistence");
     private static final Set<String> REPORT_CODES = Set.of(
             "WORKSPACE_PREPARATION_FAILED", "WORKSPACE_CLEANUP_FAILED", "WORKSPACE_RELEASE_FAILED",
             "JAVA_TRAVERSAL_FAILED", "JAVA_PARSE_FAILED", "CANDIDATE_INVALID",
@@ -50,7 +51,8 @@ public final class FileReportSink implements ReportSink {
             "GENERATION_STAGE_FAILED", "GENERATION_RESULT_MISSING",
             "GENERATION_ERRORS_MISSING", "GENERATION_TESTS_MISSING",
             "REPORT_ARTIFACT_MISSING",
-            "REPORT_WRITE_FAILED", "RUN_ID_RESOLUTION_FAILED", "GENERATION_FAILED");
+            "REPORT_WRITE_FAILED", "RUN_ID_RESOLUTION_FAILED", "GENERATION_FAILED",
+            "PERSISTENCE_WRITE_FAILED");
     private static final java.util.regex.Pattern CONTEXT_PROVIDER_CODE = java.util.regex.Pattern.compile(
             "CONTEXT_PROVIDER_[A-Z][A-Z0-9_-]{0,31}_(?:ID_FAILED|SUPPORTS_FAILED|FETCH_FAILED|NULL_RESOLUTION|TASK_MISMATCH|NOT_FOUND|RATE_LIMITED|UNAUTHORIZED|UNKNOWN)");
 
@@ -277,12 +279,60 @@ public final class FileReportSink implements ReportSink {
                     .append("- **Comment:** ").append(codeSpan(item.comment())).append("\n\n")
                     .append(fencedCode(item.methodSourceCode()))
                     .append("\n\n")
+                    .append(ticketContext(item))
                     .append("### Generated Test Case\n\n")
                     .append(fencedCode(item.generatedTestCode()))
                     .append("\n\n")
                     .append("---\n\n");
         }
         return report.toString();
+    }
+
+    private static String ticketContext(TestReportItem item) {
+        StringBuilder section = new StringBuilder()
+                .append("### Ticket Context\n\n")
+                .append("- **Status:** ").append(codeSpan(contextStatusForMarkdown(item))).append("\n");
+
+        DebtReportItem.ExternalTask task = item.externalTask();
+        if (task == null) {
+            return section.append("\n").toString();
+        }
+
+        section.append("- **Provider:** ").append(codeSpan(task.provider())).append("\n")
+                .append("- **Key:** ").append(codeSpan(task.key())).append("\n");
+        if (task.url() != null) {
+            section.append("- **URL:** ").append(codeSpan(task.url())).append("\n");
+        }
+        if (task.labels() != null && !task.labels().isEmpty()) {
+            section.append("- **Labels:** ").append(codeSpan(String.join(", ", task.labels()))).append("\n");
+        }
+        if (task.summary() != null) {
+            section.append("- **Summary:** ").append(safeHeading(task.summary())).append("\n");
+        }
+        section.append("\n");
+        if (task.description() != null) {
+            section.append("**Description:**\n\n").append(fencedBlock(task.description())).append("\n\n");
+        }
+        if (task.acceptanceCriteria() != null && !task.acceptanceCriteria().isEmpty()) {
+            section.append("**Acceptance Criteria:**\n\n");
+            for (String criterion : task.acceptanceCriteria()) {
+                section.append("- ").append(safeHeading(criterion)).append("\n");
+            }
+            section.append("\n");
+        }
+        if (item.issueReferences() != null && !item.issueReferences().isEmpty()) {
+            section.append("**Issue References:**\n\n");
+            for (DebtReportItem.IssueReference reference : item.issueReferences()) {
+                section.append("- ").append(codeSpan(reference.value()))
+                        .append(" (source: ").append(codeSpan(reference.source())).append(")\n");
+            }
+            section.append("\n");
+        }
+        return section.toString();
+    }
+
+    private static String contextStatusForMarkdown(TestReportItem item) {
+        return item.contextStatus() == null ? "UNKNOWN" : item.contextStatus();
     }
 
     private static String statusForMarkdown(TestReportItem item) {
@@ -311,9 +361,17 @@ public final class FileReportSink implements ReportSink {
     }
 
     private static String fencedCode(String value) {
+        return fencedBlock(value, "java");
+    }
+
+    private static String fencedBlock(String value) {
+        return fencedBlock(value, "");
+    }
+
+    private static String fencedBlock(String value, String language) {
         String safe = safeCode(value);
         String delimiter = "`".repeat(Math.max(3, longestBacktickRun(safe) + 1));
-        return delimiter + "java\n" + safe + "\n" + delimiter;
+        return delimiter + language + "\n" + safe + "\n" + delimiter;
     }
 
     private static String safePlainText(String value) {

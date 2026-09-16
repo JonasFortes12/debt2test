@@ -11,6 +11,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import io.github.jonasfortes12.core.model.ClassifiedDebt;
@@ -30,6 +32,7 @@ import io.github.jonasfortes12.core.model.RunStatus;
 import io.github.jonasfortes12.core.model.SatdCandidate;
 import io.github.jonasfortes12.core.port.ContextEnricher;
 import io.github.jonasfortes12.core.port.DebtClassifier;
+import io.github.jonasfortes12.core.port.PipelineRunStore;
 import io.github.jonasfortes12.core.port.ReportSink;
 import io.github.jonasfortes12.core.port.RepositoryWorkspaceProvider;
 import io.github.jonasfortes12.core.port.SatdExtractor;
@@ -50,6 +53,7 @@ public final class PipelineApplicationService {
     private final TestGenerator testGenerator;
     private final ReportSink reportSink;
     private final RunIdResolver runIdResolver;
+    private final PipelineRunStore runStore;
 
     public static final String AUTOMATIC_RUN_ID = "auto";
 
@@ -61,7 +65,7 @@ public final class PipelineApplicationService {
             TestGenerator testGenerator,
             ReportSink reportSink) {
         this(workspaceProvider, extractor, classifier, contextEnricher, testGenerator, reportSink,
-                (request, workspace) -> request.runId());
+                (request, workspace) -> request.runId(), PipelineRunStore.NO_OP);
     }
 
     public PipelineApplicationService(
@@ -72,6 +76,19 @@ public final class PipelineApplicationService {
             TestGenerator testGenerator,
             ReportSink reportSink,
             RunIdResolver runIdResolver) {
+        this(workspaceProvider, extractor, classifier, contextEnricher, testGenerator, reportSink,
+                runIdResolver, PipelineRunStore.NO_OP);
+    }
+
+    public PipelineApplicationService(
+            RepositoryWorkspaceProvider workspaceProvider,
+            SatdExtractor extractor,
+            DebtClassifier classifier,
+            ContextEnricher contextEnricher,
+            TestGenerator testGenerator,
+            ReportSink reportSink,
+            RunIdResolver runIdResolver,
+            PipelineRunStore runStore) {
         this.workspaceProvider = Objects.requireNonNull(workspaceProvider, "workspaceProvider must not be null");
         this.extractor = Objects.requireNonNull(extractor, "extractor must not be null");
         this.classifier = Objects.requireNonNull(classifier, "classifier must not be null");
@@ -79,10 +96,15 @@ public final class PipelineApplicationService {
         this.testGenerator = Objects.requireNonNull(testGenerator, "testGenerator must not be null");
         this.reportSink = Objects.requireNonNull(reportSink, "reportSink must not be null");
         this.runIdResolver = Objects.requireNonNull(runIdResolver, "runIdResolver must not be null");
+        this.runStore = Objects.requireNonNull(runStore, "runStore must not be null");
     }
 
     public PipelineResult run(PipelineRequest request) {
         Objects.requireNonNull(request, "request must not be null");
+
+        String executionId = UUID.randomUUID().toString();
+        ExecutionState state = new ExecutionState();
+        record(state, "run start", store -> store.runStarted(executionId, request));
 
         OrchestrationUtils.logPipeline(
                 "preparing repository workspace for " + UrlSanitizer.sanitize(request.repository().repositoryUrl()));
@@ -90,12 +112,13 @@ public final class PipelineApplicationService {
         try {
             workspace = workspaceProvider.prepare(request.repository());
             if (workspace == null) {
-                return failedPreparation(request.runId());
+                return finishFailedPreparation(executionId, request.runId(), state);
             }
         } catch (Exception ignored) {
-            return failedPreparation(request.runId());
+            return finishFailedPreparation(executionId, request.runId(), state);
         }
         OrchestrationUtils.logPipeline("workspace ready at " + workspace.rootDirectory());
+        record(state, "workspace", store -> store.workspaceReady(executionId, workspace));
 
         PipelineRequest executionRequest = request;
         PipelineError runIdError = null;
@@ -107,14 +130,16 @@ public final class PipelineApplicationService {
             }
         }
 
-        ExecutionState state = new ExecutionState();
         if (runIdError != null) {
             state.addError(runIdError);
+        } else {
+            String resolvedRunId = executionRequest.runId();
+            record(state, "run ID", store -> store.runIdResolved(executionId, resolvedRunId));
         }
         PipelineResult assembled;
         PipelineError releaseError;
         try {
-            executeStages(executionRequest, workspace, state);
+            executeStages(executionId, executionRequest, workspace, state);
             assembled = assemble(executionRequest.runId(), workspace, state);
         } finally {
             releaseError = releaseFailure(workspace);
@@ -122,6 +147,14 @@ public final class PipelineApplicationService {
 
         if (releaseError != null) {
             assembled = assembled.withAdditionalError(releaseError);
+            assembled = assembled.withStatus(statusFor(assembled.errors()));
+        }
+
+        PipelineResult finished = assembled;
+        PipelineError persistenceError =
+                record(state, "run completion", store -> store.runFinished(executionId, finished));
+        if (persistenceError != null) {
+            assembled = assembled.withAdditionalError(persistenceError);
             assembled = assembled.withStatus(statusFor(assembled.errors()));
         }
 
@@ -179,7 +212,8 @@ public final class PipelineApplicationService {
                 request.report());
     }
 
-    private void executeStages(PipelineRequest request, RepositoryWorkspace workspace, ExecutionState state) {
+    private void executeStages(
+            String executionId, PipelineRequest request, RepositoryWorkspace workspace, ExecutionState state) {
         OrchestrationUtils.logPipeline("extracting SATD candidates...");
         ExtractionResult extraction;
         try {
@@ -195,6 +229,7 @@ public final class PipelineApplicationService {
         state.addStageErrors("extraction", extraction.errors());
         List<SatdCandidate> candidates = indexCandidates(extraction.candidates(), state);
         OrchestrationUtils.logPipeline("extracted " + candidates.size() + " SATD candidate(s)");
+        record(state, "extracted candidates", store -> store.candidatesExtracted(executionId, candidates));
 
         OrchestrationUtils.logPipeline("classifying " + candidates.size() + " candidate(s)...");
         ClassificationResult classification;
@@ -210,6 +245,8 @@ public final class PipelineApplicationService {
         }
         state.addStageErrors("classification", classification.errors());
         indexClassifications(classification.classifications(), state);
+        List<ClassifiedDebt> classified = List.copyOf(state.classificationsById.values());
+        record(state, "classifications", store -> store.candidatesClassified(executionId, classified));
 
         List<ClassifiedDebt> satd = state.classificationsById.values().stream()
                 .filter(ClassifiedDebt::satd)
@@ -236,6 +273,8 @@ public final class PipelineApplicationService {
         state.enrichmentsById = indexEnrichments(enrichment.enrichments(), state);
         addMissingContextErrors(state);
         OrchestrationUtils.logPipeline("context enrichment complete for " + state.enrichmentsById.size() + " candidate(s)");
+        List<EnrichedSatdDebt> enrichments = List.copyOf(state.enrichmentsById.values());
+        record(state, "context", store -> store.contextEnriched(executionId, enrichments));
 
         if (!satd.isEmpty() && state.enrichmentsById.isEmpty()) {
             return;
@@ -262,6 +301,8 @@ public final class PipelineApplicationService {
         state.generatedById = indexGeneratedTests(generation.generatedTests(), state);
         addMissingGenerationErrors(state);
         OrchestrationUtils.logPipeline("test generation complete for " + state.generatedById.size() + " candidate(s)");
+        List<GeneratedTest> tests = List.copyOf(state.generatedById.values());
+        record(state, "generated tests", store -> store.testsGenerated(executionId, tests));
     }
 
     private PipelineResult assemble(String runId, RepositoryWorkspace workspace, ExecutionState state) {
@@ -458,6 +499,34 @@ public final class PipelineApplicationService {
         return errors.stream().anyMatch(PipelineError::recoverable)
                 ? RunStatus.COMPLETED_WITH_ERRORS
                 : RunStatus.COMPLETED;
+    }
+
+    /**
+     * Invokes a run-store callback. A store failure costs the run its stored history, never its
+     * analysis: the failure becomes a recoverable error, so the run ends COMPLETED_WITH_ERRORS.
+     */
+    private PipelineError record(
+            ExecutionState state, String operation, Consumer<PipelineRunStore> callback) {
+        try {
+            callback.accept(runStore);
+            return null;
+        } catch (Exception ignored) {
+            PipelineError error = new PipelineError(
+                    "persistence",
+                    "PERSISTENCE_WRITE_FAILED",
+                    "run store could not record " + operation,
+                    null,
+                    true);
+            state.addError(error);
+            return error;
+        }
+    }
+
+    private PipelineResult finishFailedPreparation(
+            String executionId, String runId, ExecutionState state) {
+        PipelineResult failed = failedPreparation(runId);
+        record(state, "run completion", store -> store.runFinished(executionId, failed));
+        return failed;
     }
 
     private static PipelineResult failedPreparation(String runId) {
