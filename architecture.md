@@ -135,6 +135,7 @@ graph TD
     ORCH --> CLASSIFIER
     ORCH --> CONTEXT
     ORCH --> TESTER
+    ORCH --> PERSISTENCE
 ```
 
 Rules:

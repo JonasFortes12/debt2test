@@ -22,17 +22,20 @@ graph TD
     CLASSIFIER[debt-classifier]
     CONTEXT[debt-context]
     TESTER[debt-tester]
+    PERSISTENCE[debt-persistence]
     ORCH[debt-orchestrator]
 
     EXTRACTOR --> CORE
     CLASSIFIER --> CORE
     CONTEXT --> CORE
     TESTER --> CORE
+    PERSISTENCE --> CORE
     ORCH --> CORE
     ORCH --> EXTRACTOR
     ORCH --> CLASSIFIER
     ORCH --> CONTEXT
     ORCH --> TESTER
+    ORCH --> PERSISTENCE
 ```
 
 ```
@@ -41,10 +44,11 @@ debt-extractor      SatdExtractor + RepositoryWorkspaceProvider impls (JGit clon
 debt-classifier     DebtClassifier impl (Weka DebtHunter binary + multi-class models)
 debt-context        ContextEnricher impl (issue-reference extraction + provider chain)
 debt-tester         TestGenerator impl (OpenAI / Anthropic / Gemini adapters)
+debt-persistence    PipelineRunStore + DatabaseReportSink impls (Flyway-managed PostgreSQL); opt-in via DEBT_PERSISTENCE_ENABLED
 debt-orchestrator   composition root: CLI entry point, pipeline sequencing, report writing
 ```
 
-`debt-extractor`, `debt-classifier`, `debt-context`, and `debt-tester` never depend on each other — they only implement `debt-core` port interfaces. Only `debt-orchestrator` wires concrete implementations together.
+`debt-extractor`, `debt-classifier`, `debt-context`, `debt-tester`, and `debt-persistence` never depend on each other — they only implement `debt-core` port interfaces. Only `debt-orchestrator` wires concrete implementations together.
 
 See [`architecture.md`](architecture.md) for the full target architecture, module responsibilities, and contribution guide.
 
