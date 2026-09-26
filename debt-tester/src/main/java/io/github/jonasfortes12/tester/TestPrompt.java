@@ -18,6 +18,7 @@ public record TestPrompt(
         requireText(framework, "framework");
     }
 
+    /** Changing this text requires bumping {@link TestGeneratorService#PROMPT_VERSION}. */
     public String userContent() {
         StringBuilder content = new StringBuilder()
                 .append("Test Framework: ").append(framework).append('\n')

@@ -545,7 +545,7 @@ class PipelineApplicationServiceTest {
                 new io.github.jonasfortes12.core.model.ExtractionOptions(runId),
                 new ClassificationOptions(true),
                 new ContextRequest(true),
-                new TestGenerationOptions("junit", "v1"),
+                new TestGenerationOptions("junit"),
                 new ReportOptions(Path.of("output")));
     }
 

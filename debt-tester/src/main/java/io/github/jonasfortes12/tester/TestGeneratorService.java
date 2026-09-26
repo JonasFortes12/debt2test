@@ -14,6 +14,13 @@ import io.github.jonasfortes12.core.result.TestGenerationResult;
 
 public class TestGeneratorService implements TestGenerator {
 
+    /**
+     * Version of the prompt this module sends: {@link LlmProviderSupport#systemInstruction} plus
+     * {@link TestPrompt#userContent}. Bump it in the same change that edits either text, so every
+     * {@link GeneratedTest} records which prompt produced it.
+     */
+    public static final String PROMPT_VERSION = "v1";
+
     private static final String INTERRUPTION_ERROR_CODE = "LLM_REQUEST_INTERRUPTED";
 
     private final LlmConfig config;
@@ -97,7 +104,7 @@ public class TestGeneratorService implements TestGenerator {
                 options.framework(),
                 providerName,
                 modelName,
-                options.promptVersion(),
+                PROMPT_VERSION,
                 ItemStatus.GENERATED,
                 ValidationStatus.NOT_RUN,
                 errors);
@@ -122,7 +129,7 @@ public class TestGeneratorService implements TestGenerator {
                 options.framework(),
                 config.getProvider(),
                 config.getModel(),
-                options.promptVersion(),
+                PROMPT_VERSION,
                 ItemStatus.GENERATION_FAILED,
                 ValidationStatus.NOT_RUN,
                 List.of(error));

@@ -140,7 +140,7 @@ public final class AppOrchestrator {
                 "allowHeuristicFallback=true",
                 "contextEnabled=true",
                 "framework=JUnit 5",
-                "promptVersion=v1");
+                "promptVersion=" + TestGeneratorService.PROMPT_VERSION);
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")
                     .digest(material.getBytes(StandardCharsets.UTF_8));
@@ -165,12 +165,22 @@ public final class AppOrchestrator {
                 new ExtractionOptions(runId),
                 new ClassificationOptions(true),
                 new ContextRequest(true),
-                new TestGenerationOptions("JUnit 5", "v1"),
+                new TestGenerationOptions("JUnit 5"),
                 new ReportOptions(options.outputDirectory()));
     }
 
     public static PipelineApplicationService createApplication(CliOptions options, LlmConfig llmConfig) {
         return createApplication(options, llmConfig, Optional.empty());
+    }
+
+    /**
+     * Builds {@link LlmConfig} internally so callers outside this reactor's {@code debt-tester}
+     * dependency chain (e.g. {@code debt-api}) never need to import a feature-module type just to
+     * assemble the application.
+     */
+    public static PipelineApplicationService createApplication(
+            CliOptions options, Optional<PersistenceContext> persistence) {
+        return createApplication(options, new LlmConfig(), persistence);
     }
 
     public static PipelineApplicationService createApplication(

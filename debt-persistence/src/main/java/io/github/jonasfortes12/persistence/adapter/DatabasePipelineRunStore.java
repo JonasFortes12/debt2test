@@ -5,7 +5,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
@@ -19,6 +21,9 @@ import io.github.jonasfortes12.core.model.PipelineError;
 import io.github.jonasfortes12.core.model.PipelineRequest;
 import io.github.jonasfortes12.core.model.PipelineResult;
 import io.github.jonasfortes12.core.model.RepositoryWorkspace;
+import io.github.jonasfortes12.core.model.RunReport;
+import io.github.jonasfortes12.core.model.RunReportItem;
+import io.github.jonasfortes12.core.model.RunSnapshot;
 import io.github.jonasfortes12.core.model.RunStatus;
 import io.github.jonasfortes12.core.model.SatdCandidate;
 import io.github.jonasfortes12.core.port.PipelineRunStore;
@@ -79,7 +84,6 @@ public class DatabasePipelineRunStore implements PipelineRunStore {
         run.setContextEnabled(request.context().enabled());
         run.setHeuristicFallbackAllowed(request.classification().allowHeuristicFallback());
         run.setTestFramework(request.testGeneration().framework());
-        run.setPromptVersion(request.testGeneration().promptVersion());
         runs.save(run);
     }
 
@@ -181,9 +185,61 @@ public class DatabasePipelineRunStore implements PipelineRunStore {
         errors.saveAll(rows);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<RunSnapshot> findRun(String executionId) {
+        return parseExecutionId(executionId)
+                .flatMap(runs::findById)
+                .map(EntityMapper::toSnapshot);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<RunReport> findReport(String executionId) {
+        Optional<UUID> parsed = parseExecutionId(executionId);
+        if (parsed.isEmpty()) {
+            return Optional.empty();
+        }
+        UUID id = parsed.get();
+        return runs.findById(id).map(run -> {
+            List<TechnicalDebtEntity> items = debts.findByRun_Id(id, Pageable.unpaged()).getContent();
+            Map<Long, List<PipelineErrorEntity>> errorsByDebtId = errors.findByRun_Id(id).stream()
+                    .filter(error -> error.getTechnicalDebt() != null)
+                    .collect(Collectors.groupingBy(error -> error.getTechnicalDebt().getId()));
+            List<RunReportItem> reportItems = items.stream()
+                    .map(debt -> EntityMapper.toReportItem(
+                            debt, errorsByDebtId.getOrDefault(debt.getId(), List.of())))
+                    .toList();
+            return new RunReport(EntityMapper.toSnapshot(run), reportItems);
+        });
+    }
+
+    @Override
+    @Transactional
+    public void runCancelled(String executionId) {
+        Optional<UUID> parsed = parseExecutionId(executionId);
+        if (parsed.isEmpty()) {
+            return;
+        }
+        runs.findById(parsed.get()).ifPresent(run -> {
+            if (!run.getStatus().isTerminal()) {
+                run.setStatus(RunStatus.CANCELLED);
+                run.setFinishedAt(Instant.now());
+            }
+        });
+    }
+
     private PipelineRunEntity requireRun(String executionId) {
         return runs.findById(UUID.fromString(executionId))
                 .orElseThrow(() -> new IllegalStateException("no run for execution " + executionId));
+    }
+
+    private static Optional<UUID> parseExecutionId(String executionId) {
+        try {
+            return Optional.of(UUID.fromString(executionId));
+        } catch (IllegalArgumentException malformed) {
+            return Optional.empty();
+        }
     }
 
     private Map<String, Long> idIndex(UUID runId) {

@@ -87,6 +87,7 @@ final class LlmProviderSupport {
         return trimmed;
     }
 
+    /** Changing this text requires bumping {@link TestGeneratorService#PROMPT_VERSION}. */
     static String systemInstruction(TestPrompt prompt) {
         return "You are an expert Java test engineer. Generate a comprehensive "
                 + prompt.framework()

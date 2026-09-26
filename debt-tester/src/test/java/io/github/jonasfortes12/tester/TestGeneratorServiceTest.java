@@ -39,7 +39,7 @@ public class TestGeneratorServiceTest {
 
         GeneratedTest generated = service.generate(
                 List.of(enrichedDebt("run-1:src/A.java:10:run")),
-                new TestGenerationOptions("JUnit 5", "v1"))
+                new TestGenerationOptions("JUnit 5"))
                 .generatedTests().get(0);
 
         assertEquals("// Mock Test generated because API key is missing\n@Test\n"
@@ -65,7 +65,7 @@ public class TestGeneratorServiceTest {
 
         service.generate(
                 List.of(enrichedDebt("run-1:src/A.java:10:run", externalTask())),
-                new TestGenerationOptions("JUnit 5", "v2"));
+                new TestGenerationOptions("JUnit 5"));
 
         assertEquals(1, prompts.size());
         String content = prompts.get(0).userContent();
@@ -90,7 +90,7 @@ public class TestGeneratorServiceTest {
 
         GeneratedTest generated = service.generate(
                 List.of(enrichedDebt("run-1:src/A.java:10:run")),
-                new TestGenerationOptions("JUnit 5", "prompt-7"))
+                new TestGenerationOptions("JUnit 5"))
                 .generatedTests().get(0);
 
         assertEquals("@Test void generated() {}", generated.sourceCode());
@@ -98,7 +98,7 @@ public class TestGeneratorServiceTest {
         assertEquals("JUnit 5", generated.framework());
         assertEquals("anthropic", generated.provider());
         assertEquals("claude-test", generated.model());
-        assertEquals("prompt-7", generated.promptVersion());
+        assertEquals(TestGeneratorService.PROMPT_VERSION, generated.promptVersion());
         assertEquals(ItemStatus.GENERATED, generated.status());
         assertEquals(ValidationStatus.NOT_RUN, generated.validationStatus());
     }
@@ -113,7 +113,7 @@ public class TestGeneratorServiceTest {
 
         TestGenerationResult result = service.generate(
                 List.of(enrichedDebt("run-1:src/A.java:10:run")),
-                new TestGenerationOptions("JUnit 5", "v1"));
+                new TestGenerationOptions("JUnit 5"));
         GeneratedTest generated = result.generatedTests().get(0);
 
         assertEquals(ItemStatus.GENERATION_FAILED, generated.status());
@@ -141,7 +141,7 @@ public class TestGeneratorServiceTest {
 
         GeneratedTest generated = service.generate(
                 List.of(enrichedDebt("run-1:src/A.java:10:run")),
-                new TestGenerationOptions("JUnit 5", "v1"))
+                new TestGenerationOptions("JUnit 5"))
                 .generatedTests().get(0);
 
         assertEquals("key", config.getApiKey());
@@ -159,7 +159,7 @@ public class TestGeneratorServiceTest {
 
         GeneratedTest generated = service.generate(
                 List.of(enrichedDebt("run-1:src/A.java:10:run")),
-                new TestGenerationOptions("JUnit 5", "v1"))
+                new TestGenerationOptions("JUnit 5"))
                 .generatedTests().get(0);
 
         assertEquals(ItemStatus.GENERATION_FAILED, generated.status());
@@ -178,7 +178,7 @@ public class TestGeneratorServiceTest {
 
         GeneratedTest generated = service.generate(
                 List.of(enrichedDebt("run-1:src/A.java:10:run")),
-                new TestGenerationOptions("JUnit 5", "v1"))
+                new TestGenerationOptions("JUnit 5"))
                 .generatedTests().get(0);
 
         assertEquals("LLM_HTTP_RATE_LIMITED", generated.errors().get(0).code());
@@ -199,7 +199,7 @@ public class TestGeneratorServiceTest {
             TestGenerationResult result = service.generate(
                     List.of(enrichedDebt("run-1:src/A.java:10:run", "TODO: interrupt"),
                             enrichedDebt("run-1:src/B.java:20:save", "TODO: must not run")),
-                    new TestGenerationOptions("JUnit 5", "v1"));
+                    new TestGenerationOptions("JUnit 5"));
 
             assertEquals(List.of("TODO: interrupt"), requestedComments);
             assertEquals(1, result.generatedTests().size());
@@ -225,7 +225,7 @@ public class TestGeneratorServiceTest {
             TestGenerationResult result = service.generate(
                     List.of(enrichedDebt("run-1:src/A.java:10:run"),
                             enrichedDebt("run-1:src/B.java:20:save")),
-                    new TestGenerationOptions("JUnit 5", "v1"));
+                    new TestGenerationOptions("JUnit 5"));
 
             assertEquals(List.of("TODO: simplify this method"), requestedComments);
             assertEquals(1, result.generatedTests().size());
@@ -248,7 +248,7 @@ public class TestGeneratorServiceTest {
         try {
             GeneratedTest generated = service.generate(
                     List.of(enrichedDebt("run-1:src/A.java:10:run")),
-                    new TestGenerationOptions("JUnit 5", "v1"))
+                    new TestGenerationOptions("JUnit 5"))
                     .generatedTests().get(0);
 
             assertEquals("LLM_GENERATION_FAILED", generated.errors().get(0).code());
@@ -275,7 +275,7 @@ public class TestGeneratorServiceTest {
         TestGenerationResult result = service.generate(
                 List.of(enrichedDebt("run-1:src/A.java:10:run", "TODO: succeed"),
                         enrichedDebt("run-1:src/B.java:20:save", "TODO: fail")),
-                new TestGenerationOptions("JUnit 5", "v1"));
+                new TestGenerationOptions("JUnit 5"));
 
         assertEquals(List.of("TODO: succeed", "TODO: fail"), requestedComments);
         assertEquals(ItemStatus.GENERATED, result.generatedTests().get(0).status());
@@ -294,7 +294,7 @@ public class TestGeneratorServiceTest {
 
         TestGenerationResult result = service.generate(
                 List.of(enrichedDebt("run-1:src/A.java:10:run")),
-                new TestGenerationOptions("JUnit 5", "v1"));
+                new TestGenerationOptions("JUnit 5"));
 
         assertNotNull(result.generatedTests().get(0));
         assertThrows(UnsupportedOperationException.class,
@@ -310,7 +310,7 @@ public class TestGeneratorServiceTest {
         TestGeneratorService service = new TestGeneratorService(
                 new LlmConfig("openai", "", "gpt-test", ""),
                 prompt -> "must not be called");
-        TestGenerationOptions options = new TestGenerationOptions("JUnit 5", "v1");
+        TestGenerationOptions options = new TestGenerationOptions("JUnit 5");
         List<EnrichedSatdDebt> debtsWithNull = new ArrayList<>();
         debtsWithNull.add(null);
 

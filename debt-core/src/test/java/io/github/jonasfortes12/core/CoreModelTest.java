@@ -438,6 +438,16 @@ class CoreModelTest {
                                 .getCause() instanceof IllegalStateException);
         }
 
+        @Test
+        void runStatusIsTerminalMatchesExactlyTheFourTerminalValues() {
+                assertTrue(RunStatus.COMPLETED.isTerminal());
+                assertTrue(RunStatus.COMPLETED_WITH_ERRORS.isTerminal());
+                assertTrue(RunStatus.FAILED.isTerminal());
+                assertTrue(RunStatus.CANCELLED.isTerminal());
+                assertFalse(RunStatus.QUEUED.isTerminal());
+                assertFalse(RunStatus.RUNNING.isTerminal());
+        }
+
         private static SatdCandidate sampleCandidate() {
                 return new SatdCandidate(
                                 "run-1:src/A.java:10:run",
@@ -456,7 +466,7 @@ class CoreModelTest {
                                 new io.github.jonasfortes12.core.model.ExtractionOptions("run-1"),
                                 new ClassificationOptions(true),
                                 new io.github.jonasfortes12.core.model.ContextRequest(true),
-                                new io.github.jonasfortes12.core.model.TestGenerationOptions("JUnit 5", "v1"),
+                                new io.github.jonasfortes12.core.model.TestGenerationOptions("JUnit 5"),
                                 new io.github.jonasfortes12.core.model.ReportOptions(Path.of("output")));
         }
 

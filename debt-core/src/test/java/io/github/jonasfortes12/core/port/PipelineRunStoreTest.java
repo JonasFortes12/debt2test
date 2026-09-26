@@ -2,6 +2,7 @@ package io.github.jonasfortes12.core.port;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -28,7 +29,7 @@ class PipelineRunStoreTest {
                 new ExtractionOptions("run-1"),
                 new ClassificationOptions(true),
                 new ContextRequest(true),
-                new TestGenerationOptions("junit5", "v1"),
+                new TestGenerationOptions("junit5"),
                 new ReportOptions(Path.of("output")));
     }
 
@@ -66,5 +67,14 @@ class PipelineRunStoreTest {
                 "run-1", RunStatus.COMPLETED, null, List.of(), List.of(), null));
 
         assertEquals("started:exec-2", observed.toString());
+    }
+
+    @Test
+    void newReadAndCancelDefaultsAreNoOpsToo() {
+        PipelineRunStore store = PipelineRunStore.NO_OP;
+
+        assertDoesNotThrow(() -> store.runCancelled("exec-1"));
+        assertTrue(store.findRun("exec-1").isEmpty());
+        assertTrue(store.findReport("exec-1").isEmpty());
     }
 }
