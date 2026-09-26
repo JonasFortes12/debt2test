@@ -15,7 +15,7 @@ The target pipeline accepts a Java repository, extracts source-code context and 
 The architecture must support:
 
 - Replacing Git, AST, classifier, issue-tracker, and LLM providers independently.
-- Running the same use case from a command-line interface and a future Spring Boot API.
+- Running the same use case from a command-line interface and the `debt-api` REST adapter.
 - Preserving enough context and provenance for academic evaluation and reproducibility.
 - Returning partial results when one item or one optional provider fails.
 - Adding new context providers without changing the extractor, classifier, or tester.
@@ -60,7 +60,7 @@ The initial runtime can remain a synchronous CLI. The application boundary must 
 
 ## 4. Target Repository Structure
 
-The target Maven reactor contains seven modules:
+The target Maven reactor contains eight modules:
 
 ```text
 debt2test/
@@ -105,6 +105,12 @@ debt2test/
 │       ├── cli/
 │       ├── configuration/
 │       └── reporting/
+├── debt-api/
+│   ├── pom.xml
+│   └── src/main/java/.../api/
+│       ├── web/
+│       ├── dto/
+│       └── config/
 ├── preTrainedModels/
 └── output/
 ```
@@ -124,6 +130,7 @@ graph TD
     TESTER[debt-tester]
     PERSISTENCE[debt-persistence]
     ORCH[debt-orchestrator]
+    API[debt-api]
 
     EXTRACTOR --> CORE
     CLASSIFIER --> CORE
@@ -136,6 +143,8 @@ graph TD
     ORCH --> CONTEXT
     ORCH --> TESTER
     ORCH --> PERSISTENCE
+    API --> CORE
+    API --> ORCH
 ```
 
 Rules:
@@ -261,7 +270,7 @@ Responsibilities:
 - Correlate candidates, classifications, context, generated tests, and errors.
 - Apply stage and item-level error policy.
 - Persist or export reports through an output adapter.
-- Expose a CLI initially and a Spring Boot REST adapter later.
+- Expose the pipeline application service to the CLI; `debt-api` exposes it over HTTP as a separate delivery module (§13.2).
 
 The former `MainPipeline` belongs here. It must not remain inside `debt-classifier`, because sequencing all stages is an application responsibility rather than a classification responsibility.
 
@@ -569,14 +578,14 @@ run-metadata.json       execution and provenance metadata, if needed
 
 Reports must not contain API keys, authorization headers, or raw provider payloads by default. Raw payload retention, if needed for research, must be explicitly configured and stored separately with redaction rules.
 
-## 13. CLI and Future Spring Boot API
+## 13. CLI and Spring Boot REST API
 
 The application service must be independent of the delivery mechanism.
 
 ```mermaid
 graph TD
     CLI[CLI adapter]
-    REST[Future Spring Boot REST adapter]
+    REST[Spring Boot REST adapter debt-api]
     APP[Pipeline application service]
     JOB[Run status and job boundary]
     STAGES[Core ports and stage implementations]
@@ -604,20 +613,39 @@ debt-orchestrator.Main
 
 The CLI must not be the owner of domain logic. It should be replaceable by a REST adapter.
 
-### 13.2 Future REST API
+### 13.2 REST API (`debt-api`)
 
-The planned Spring Boot adapter should expose:
+The Spring Boot adapter is implemented as its own module, `debt-api`, depending only on
+`debt-core` and `debt-orchestrator`. It exposes:
 
 ```http
 POST /api/pipeline/runs
-GET  /api/pipeline/runs/{runId}
-GET  /api/pipeline/runs/{runId}/report
-POST /api/pipeline/runs/{runId}/cancel
+GET  /api/pipeline/runs/{executionId}
+GET  /api/pipeline/runs/{executionId}/report
+POST /api/pipeline/runs/{executionId}/cancel
 ```
 
-`POST /api/pipeline/runs` accepts repository, context-provider, classifier, tester, and execution configuration. It returns a run ID. The first implementation may execute synchronously, but the API contract should allow `202 Accepted` and asynchronous processing.
+The path parameter is the **execution ID** — an identifier minted per HTTP submission — not the
+domain `runId` carried inside `PipelineRequest`/`PipelineResult`. This mirrors the existing
+`PipelineRunStore` port, which is already keyed by `executionId` throughout (see §8).
 
-Run states should be observable without exposing provider credentials. API responses should return sanitized configuration summaries and report references, not secrets.
+Execution is always asynchronous: `POST /api/pipeline/runs` calls
+`PipelineApplicationService.allocate(request)` to record the run and mint the execution ID, then
+hands the request to `PipelineRunLauncher`, which submits it to a single background thread and
+returns immediately. The endpoint responds `202 Accepted` with the execution ID before the
+pipeline runs; there is no synchronous execution path. `GET /api/pipeline/runs/{executionId}` and
+`GET /api/pipeline/runs/{executionId}/report` read state back through the read methods added to
+`PipelineRunStore` — `findRun` (run status and counts) and `findReport` (full report once
+finished) — rather than reconstructing a `PipelineResult` in memory. `POST
+/api/pipeline/runs/{executionId}/cancel` performs a best-effort `Future.cancel(true)` plus an
+unconditional `PipelineRunStore.runCancelled` write; it does not guarantee in-flight work stops.
+
+`debt-api` requires `DEBT_PERSISTENCE_ENABLED=true` to start, since `GET` endpoints have no
+in-memory fallback to read from.
+
+Run states are observable without exposing provider credentials. API responses return sanitized
+configuration summaries and report references, not secrets. See
+`docs/superpowers/specs/2026-09-15-rest-api-design.md` for the full design.
 
 ## 14. Security and Configuration
 
@@ -723,11 +751,11 @@ The migration should be incremental. At each phase, the existing CLI behavior sh
 - Add timeouts, bounded retries, cancellation, and run metadata.
 - Add structured logging and sanitized error reporting.
 
-### Phase 7: Add the Spring Boot adapter
+### Phase 7: Add the Spring Boot adapter (done)
 
-- Introduce REST controllers in `debt-orchestrator` or a dedicated delivery module if the application grows significantly.
-- Reuse the pipeline application service.
-- Add a run store and asynchronous executor only when the UI workflow requires it.
+- Added `debt-api`, a dedicated delivery module depending only on `debt-core` and `debt-orchestrator`.
+- Reused the pipeline application service via `AppOrchestrator.createApplication(...)`, split into `allocate()`/`execute()`.
+- Added a run store and asynchronous executor: `PipelineRunStore` gained `findRun`/`findReport`/`runCancelled`, and `debt-api`'s `PipelineRunLauncher` runs submissions on a single background thread. See §13.2 and `docs/superpowers/specs/2026-09-15-rest-api-design.md`.
 
 ## 17. Contribution Guide
 
@@ -802,6 +830,7 @@ The following decisions should be made in implementation plans rather than assum
 - ~~Whether reports are written locally only or through a storage port for the future service.~~ **Resolved:** both. `FileReportSink` stays the primary sink (it produces the paths `validArtifact` requires); `DatabaseReportSink` runs alongside it under `CompositeReportSink`.
 - Whether generated-test validation is a separate `debt-validator` module or an optional stage inside `debt-tester`.
 - ~~Whether asynchronous execution requires a persistent run store or can initially use in-memory state.~~ **Resolved:** a persistent run store. `debt-core` defines the `PipelineRunStore` port; `debt-persistence` implements it over PostgreSQL. See `docs/superpowers/specs/2026-09-08-database-persistence-layer-design.md`.
+- ~~Whether the REST adapter's asynchronous execution model needs a worker pool or job queue.~~ **Resolved for this spec's scope:** a single-thread executor in `debt-api`'s `PipelineRunLauncher`, with no persistent job queue across restarts. A process crash loses in-flight `Future`s and leaves their rows `RUNNING`; this is deferred to the same future reconciliation sweep already noted for the persistence layer, not solved differently here. See `docs/superpowers/specs/2026-09-15-rest-api-design.md` D-2 and D-7.
 - Whether Java 25 remains the supported build baseline. The current repository POM uses Java 25; Maven, VS Code, CI, and contributor documentation must agree on the selected version.
 - Whether raw provider payloads are retained for research reproducibility, and what redaction policy applies.
 
@@ -811,13 +840,13 @@ Open decisions must be resolved with an ADR or an updated implementation plan be
 
 The target architecture is considered implemented when:
 
-- The six Maven modules build as a reactor.
+- The eight Maven modules build as a reactor.
 - `debt-core` has no dependency on feature modules or external provider SDKs.
 - Extractor, classifier, context, and tester modules compile independently against core contracts.
 - The orchestrator can run the complete pipeline using only mock providers.
 - A Jira provider can be added without changing extractor or classifier code.
 - An LLM provider can be added without changing orchestration logic.
-- The same application service can be invoked by the CLI and a future REST adapter.
+- The same application service can be invoked by the CLI and the `debt-api` REST adapter.
 - Reports preserve source location, classification, context, generation status, errors, and provenance.
 - No API credential is written to logs or artifacts.
 - Unit and component tests run without live external credentials.

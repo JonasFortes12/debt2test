@@ -1,6 +1,7 @@
 package io.github.jonasfortes12.core.port;
 
 import java.util.List;
+import java.util.Optional;
 
 import io.github.jonasfortes12.core.model.ClassifiedDebt;
 import io.github.jonasfortes12.core.model.EnrichedSatdDebt;
@@ -8,6 +9,8 @@ import io.github.jonasfortes12.core.model.GeneratedTest;
 import io.github.jonasfortes12.core.model.PipelineRequest;
 import io.github.jonasfortes12.core.model.PipelineResult;
 import io.github.jonasfortes12.core.model.RepositoryWorkspace;
+import io.github.jonasfortes12.core.model.RunReport;
+import io.github.jonasfortes12.core.model.RunSnapshot;
 import io.github.jonasfortes12.core.model.SatdCandidate;
 
 /**
@@ -52,5 +55,23 @@ public interface PipelineRunStore {
 
     /** Called exactly once per run, including runs that failed before any stage ran. */
     default void runFinished(String executionId, PipelineResult result) {
+    }
+
+    /** Returns the run's current snapshot, or empty if {@code executionId} is unknown. */
+    default Optional<RunSnapshot> findRun(String executionId) {
+        return Optional.empty();
+    }
+
+    /** Returns the run's full report, or empty if {@code executionId} is unknown. */
+    default Optional<RunReport> findReport(String executionId) {
+        return Optional.empty();
+    }
+
+    /**
+     * Marks a non-terminal run CANCELLED. A no-op by default, and expected to be a no-op for a
+     * run that has already reached a terminal status (see the implementation in
+     * {@code DatabasePipelineRunStore}).
+     */
+    default void runCancelled(String executionId) {
     }
 }

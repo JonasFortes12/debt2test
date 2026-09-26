@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
@@ -18,11 +20,15 @@ import io.github.jonasfortes12.core.model.GeneratedTest;
 import io.github.jonasfortes12.core.model.ItemStatus;
 import io.github.jonasfortes12.core.model.PipelineError;
 import io.github.jonasfortes12.core.model.Provenance;
+import io.github.jonasfortes12.core.model.RunReportItem;
+import io.github.jonasfortes12.core.model.RunSnapshot;
+import io.github.jonasfortes12.core.model.RunStatus;
 import io.github.jonasfortes12.core.model.SatdCandidate;
 import io.github.jonasfortes12.core.model.SourceProvenance;
 import io.github.jonasfortes12.core.model.ValidationStatus;
 import io.github.jonasfortes12.persistence.entity.DebtContextEntity;
 import io.github.jonasfortes12.persistence.entity.GeneratedTestEntity;
+import io.github.jonasfortes12.persistence.entity.PipelineErrorEntity;
 import io.github.jonasfortes12.persistence.entity.PipelineRunEntity;
 import io.github.jonasfortes12.persistence.entity.TechnicalDebtEntity;
 
@@ -137,5 +143,98 @@ class EntityMapperTest {
         assertEquals("openai", entity.getProvider());
         assertEquals("gpt-test", entity.getModel());
         assertEquals("v1", entity.getPromptVersion());
+    }
+
+    @Test
+    void toSnapshotMapsRunColumnsAndSplitsReportPaths() {
+        PipelineRunEntity run = new PipelineRunEntity();
+        run.setId(UUID.randomUUID());
+        run.setRunId("run-1");
+        run.setStatus(RunStatus.COMPLETED);
+        run.setStartedAt(Instant.parse("2026-09-15T10:00:00Z"));
+        run.setFinishedAt(Instant.parse("2026-09-15T10:05:00Z"));
+        run.setCandidateCount(3);
+        run.setSatdCount(2);
+        run.setGeneratedTestCount(1);
+        run.setReportPaths("output/debt-report.json\noutput/debt-test-report.json");
+
+        RunSnapshot snapshot = EntityMapper.toSnapshot(run);
+
+        assertEquals(run.getId().toString(), snapshot.executionId());
+        assertEquals("run-1", snapshot.runId());
+        assertEquals(RunStatus.COMPLETED, snapshot.status());
+        assertEquals(3, snapshot.candidateCount());
+        assertEquals(List.of("output/debt-report.json", "output/debt-test-report.json"), snapshot.reportPaths());
+    }
+
+    @Test
+    void toSnapshotReturnsEmptyReportPathsWhenNoneAreRecordedYet() {
+        PipelineRunEntity run = new PipelineRunEntity();
+        run.setId(UUID.randomUUID());
+        run.setStatus(RunStatus.RUNNING);
+        run.setStartedAt(Instant.now());
+
+        RunSnapshot snapshot = EntityMapper.toSnapshot(run);
+
+        assertTrue(snapshot.reportPaths().isEmpty());
+    }
+
+    @Test
+    void toReportItemMapsContextAndGeneratedTestAssociations() {
+        TechnicalDebtEntity debt = new TechnicalDebtEntity();
+        debt.setCandidateId("candidate-1");
+        debt.setFilePath("src/A.java");
+        debt.setMethodName("save");
+        debt.setLineNumber(10);
+        debt.setComment("// TODO fix");
+        debt.setSatd(true);
+        debt.setDebtType("DESIGN");
+        debt.setConfidence(0.9);
+
+        DebtContextEntity context = new DebtContextEntity();
+        context.setContextStatus(ContextStatus.MATCHED);
+        context.setTaskKey("JIRA-1");
+        context.setSummary("Fix it");
+        context.setUrl("https://jira/JIRA-1");
+        debt.setContext(context);
+
+        GeneratedTestEntity test = new GeneratedTestEntity();
+        test.setSourceCode("class Test {}");
+        test.setProvider("openai");
+        test.setModel("gpt-test");
+        test.setStatus(ItemStatus.GENERATED);
+        debt.setGeneratedTest(test);
+
+        RunReportItem item = EntityMapper.toReportItem(debt, List.of());
+
+        assertEquals("candidate-1", item.candidateId());
+        assertEquals("JIRA-1", item.taskKey());
+        assertEquals("Fix it", item.taskSummary());
+        assertEquals("class Test {}", item.generatedTestSourceCode());
+        assertEquals("GENERATED", item.testStatus());
+        assertTrue(item.errorMessages().isEmpty());
+    }
+
+    @Test
+    void toReportItemLeavesContextAndTestFieldsNullWhenAssociationsAreMissing() {
+        TechnicalDebtEntity debt = new TechnicalDebtEntity();
+        debt.setCandidateId("candidate-2");
+        debt.setFilePath("src/B.java");
+        debt.setMethodName("load");
+        debt.setLineNumber(5);
+        debt.setComment("// FIXME");
+        debt.setSatd(false);
+        debt.setDebtType("NON_SATD");
+
+        PipelineErrorEntity error = new PipelineErrorEntity();
+        error.setMessage("classification unavailable");
+
+        RunReportItem item = EntityMapper.toReportItem(debt, List.of(error));
+
+        assertNull(item.contextStatus());
+        assertNull(item.taskKey());
+        assertNull(item.generatedTestSourceCode());
+        assertNull(item.testStatus());
+        assertEquals(List.of("classification unavailable"), item.errorMessages());
     }
 }

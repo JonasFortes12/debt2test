@@ -56,7 +56,11 @@ final class RunStoreScenario {
     }
 
     PipelineResult runWith(PipelineRunStore store) {
-        PipelineApplicationService service = new PipelineApplicationService(
+        return service(store).run(request());
+    }
+
+    PipelineApplicationService service(PipelineRunStore store) {
+        return new PipelineApplicationService(
                 workspaceProvider(),
                 extractor(),
                 classifier(),
@@ -65,17 +69,16 @@ final class RunStoreScenario {
                 new FileReportSink(),
                 (request, workspace) -> request.runId(),
                 store);
-        return service.run(request());
     }
 
-    private PipelineRequest request() {
+    PipelineRequest request() {
         return new PipelineRequest(
                 "run-1",
                 new RepositoryRequest(REPO, "main"),
                 new ExtractionOptions("run-1"),
                 new ClassificationOptions(true),
                 new ContextRequest(true),
-                new TestGenerationOptions("junit5", "v1"),
+                new TestGenerationOptions("junit5"),
                 new ReportOptions(outputDirectory));
     }
 

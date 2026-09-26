@@ -91,7 +91,7 @@ class RunStoreRoundTripIntegrationTest {
                 new ExtractionOptions("run-1"),
                 new ClassificationOptions(true),
                 new ContextRequest(true),
-                new TestGenerationOptions("junit5", "v1"),
+                new TestGenerationOptions("junit5"),
                 new ReportOptions(Path.of("output")));
     }
 

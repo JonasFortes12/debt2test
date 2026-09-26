@@ -15,6 +15,7 @@ import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import io.github.jonasfortes12.core.error.PipelineException;
 import io.github.jonasfortes12.core.model.ClassifiedDebt;
 import io.github.jonasfortes12.core.model.ContextStatus;
 import io.github.jonasfortes12.core.model.EnrichedSatdDebt;
@@ -106,6 +107,41 @@ public final class PipelineApplicationService {
         ExecutionState state = new ExecutionState();
         record(state, "run start", store -> store.runStarted(executionId, request));
 
+        return runStages(executionId, request, state);
+    }
+
+    /**
+     * Allocates an execution ID and records the run's start, without running any stage.
+     *
+     * <p>Unlike {@link #run(PipelineRequest)}, a persistence failure here is not swallowed into a
+     * recoverable error on some eventual {@link PipelineResult}: there is no result yet to attach
+     * it to, and a caller that cannot allocate a run (e.g. {@code debt-api}) needs to know
+     * synchronously that allocation failed, so it can refuse the request instead of accepting one
+     * it can never report status for.
+     *
+     * @throws PipelineException if the run store could not record the run's start
+     */
+    public String allocate(PipelineRequest request) {
+        Objects.requireNonNull(request, "request must not be null");
+
+        String executionId = UUID.randomUUID().toString();
+        PipelineError allocationError = record(
+                new ExecutionState(), "run start", store -> store.runStarted(executionId, request));
+        if (allocationError != null) {
+            throw new PipelineException(allocationError);
+        }
+        return executionId;
+    }
+
+    /** Runs every stage for a run already allocated by {@link #allocate(PipelineRequest)}. */
+    public PipelineResult execute(String executionId, PipelineRequest request) {
+        Objects.requireNonNull(executionId, "executionId must not be null");
+        Objects.requireNonNull(request, "request must not be null");
+
+        return runStages(executionId, request, new ExecutionState());
+    }
+
+    private PipelineResult runStages(String executionId, PipelineRequest request, ExecutionState state) {
         OrchestrationUtils.logPipeline(
                 "preparing repository workspace for " + UrlSanitizer.sanitize(request.repository().repositoryUrl()));
         RepositoryWorkspace workspace;

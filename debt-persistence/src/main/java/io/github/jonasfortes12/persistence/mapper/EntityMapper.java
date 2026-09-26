@@ -11,6 +11,8 @@ import io.github.jonasfortes12.core.model.ExternalTaskSpec;
 import io.github.jonasfortes12.core.model.GeneratedTest;
 import io.github.jonasfortes12.core.model.PipelineError;
 import io.github.jonasfortes12.core.model.Provenance;
+import io.github.jonasfortes12.core.model.RunReportItem;
+import io.github.jonasfortes12.core.model.RunSnapshot;
 import io.github.jonasfortes12.core.model.SatdCandidate;
 import io.github.jonasfortes12.core.util.UrlSanitizer;
 import io.github.jonasfortes12.persistence.entity.DebtContextEntity;
@@ -110,5 +112,46 @@ public final class EntityMapper {
         entity.setRecoverable(error.recoverable());
         entity.setRecordedAt(Instant.now());
         return entity;
+    }
+
+    public static RunSnapshot toSnapshot(PipelineRunEntity run) {
+        return new RunSnapshot(
+                run.getId().toString(),
+                run.getRunId(),
+                run.getStatus(),
+                run.getStartedAt(),
+                run.getFinishedAt(),
+                run.getCandidateCount(),
+                run.getSatdCount(),
+                run.getGeneratedTestCount(),
+                reportPathList(run.getReportPaths()));
+    }
+
+    public static RunReportItem toReportItem(TechnicalDebtEntity debt, List<PipelineErrorEntity> errors) {
+        DebtContextEntity context = debt.getContext();
+        GeneratedTestEntity test = debt.getGeneratedTest();
+        return new RunReportItem(
+                debt.getCandidateId(),
+                debt.getFilePath(),
+                debt.getMethodName(),
+                debt.getLineNumber(),
+                debt.getComment(),
+                debt.getSatd(),
+                debt.getDebtType(),
+                debt.getConfidence(),
+                context == null ? null : context.getContextStatus().name(),
+                context == null ? null : context.getTaskKey(),
+                context == null ? null : context.getSummary(),
+                context == null ? null : context.getUrl(),
+                test == null ? null : test.getSourceCode(),
+                test == null ? null : test.getProvider(),
+                test == null ? null : test.getModel(),
+                test == null ? null : test.getStatus().name(),
+                errors.stream().map(PipelineErrorEntity::getMessage).toList());
+    }
+
+    /** {@code PipelineRunEntity.reportPaths} is newline-delimited; see {@code DatabaseReportSink}. */
+    private static List<String> reportPathList(String reportPaths) {
+        return reportPaths == null || reportPaths.isBlank() ? List.of() : List.of(reportPaths.split("\n"));
     }
 }

@@ -16,6 +16,7 @@
         <module>debt-tester</module>
         <module>debt-persistence</module>
         <module>debt-orchestrator</module>
+        <module>debt-api</module>
     </modules>
 
     <properties>

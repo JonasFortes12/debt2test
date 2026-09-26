@@ -59,9 +59,6 @@ public class PipelineRunEntity {
     @Column(name = "test_framework", length = 64)
     private String testFramework;
 
-    @Column(name = "prompt_version", length = 64)
-    private String promptVersion;
-
     @Column(name = "candidate_count", nullable = false)
     private int candidateCount;
 
@@ -99,8 +96,6 @@ public class PipelineRunEntity {
     public void setHeuristicFallbackAllowed(boolean v) { this.heuristicFallbackAllowed = v; }
     public String getTestFramework() { return testFramework; }
     public void setTestFramework(String testFramework) { this.testFramework = testFramework; }
-    public String getPromptVersion() { return promptVersion; }
-    public void setPromptVersion(String promptVersion) { this.promptVersion = promptVersion; }
     public int getCandidateCount() { return candidateCount; }
     public void setCandidateCount(int candidateCount) { this.candidateCount = candidateCount; }
     public int getSatdCount() { return satdCount; }
