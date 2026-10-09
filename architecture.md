@@ -156,6 +156,7 @@ Rules:
 5. JSON serialization, CLI arguments, Spring annotations, HTTP clients, Weka, JavaParser, JGit, and dotenv configuration belong outside `debt-core`.
 6. A generated JSON file is an external artifact, not an internal module-to-module API.
 7. No module may reach into another module's `src`, `target`, output directory, or private implementation package.
+8. `debt-api` is a delivery module that depends only on `debt-core` and `debt-orchestrator`. It obtains the pipeline application service from the orchestrator (`AppOrchestrator.createApplication(...)`) and must not depend on `debt-extractor`, `debt-classifier`, `debt-context`, `debt-tester`, or `debt-persistence`. Spring Boot, HTTP DTOs, and the asynchronous launcher (`PipelineRunLauncher`) stay inside `debt-api`; no feature module and no `debt-core` type may depend on it (§13.2).
 
 ## 6. Module Responsibilities
 
@@ -289,6 +290,25 @@ Responsibilities:
 The module depends only on `debt-core`. It never calls the extractor, classifier, context, or
 tester modules, and no persistence type appears in `debt-core`. Persistence is disabled by
 default so the CLI and the default build require neither a database nor Docker.
+
+### 6.8 `debt-api`
+
+The API module is a Spring Boot delivery adapter that exposes the pipeline over HTTP.
+
+Responsibilities:
+
+- Map HTTP requests (`CreateRunRequest`) into a `PipelineRequest` and core read models into response DTOs (`RunAcceptedResponse`, `RunStatusResponse`, `RunReportResponse`).
+- Obtain the pipeline application service from `debt-orchestrator` (`AppOrchestrator.createApplication(...)`) instead of constructing stage adapters itself.
+- Submit runs asynchronously through `PipelineRunLauncher`: `allocate()` mints the execution ID, then `execute()` runs on a single background thread while the endpoint answers `202 Accepted`.
+- Read run status and reports back through `PipelineRunStore` (`findRun`, `findReport`) rather than holding results in memory.
+- Handle best-effort cancellation and record it via `PipelineRunStore.runCancelled`.
+- Translate missing, unfinished, or already-finished runs into typed HTTP errors (`ApiExceptionHandler`, `ApiError`).
+- Own web configuration (CORS, `.env` loading into the Spring environment) and never return secrets in responses.
+
+The module depends only on `debt-core` and `debt-orchestrator`. It contains no domain logic and no
+stage sequencing, and it never calls the extractor, classifier, context, tester, or persistence
+modules directly. It requires `DEBT_PERSISTENCE_ENABLED=true` to start, since its read endpoints
+have no in-memory fallback. See §13.2 for the endpoint contract.
 
 ## 7. Core Domain Model
 
