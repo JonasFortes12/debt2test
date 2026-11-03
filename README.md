@@ -179,26 +179,26 @@ mvn install -DskipTests
 mvn -pl debt-api spring-boot:run
 ```
 
-The API uses the same defaults as the CLI for model paths and output directory. Interactive OpenAPI docs are served at `http://localhost:8080/swagger-ui.html`.
+The API uses the same defaults as the CLI for model paths and output directory. It listens on `DEBT_API_PORT` (default `8080`; `.env.example` sets `8182`). Interactive OpenAPI docs are served at `http://localhost:<port>/swagger-ui.html` and the raw spec at `/v3/api-docs`; they are the full reference for fields, statuses and errors.
 
 ### 4. Use the endpoints
 
-| Method | Path                                      | Result                                                                          |
-| ------ | ----------------------------------------- | ------------------------------------------------------------------------------- |
-| `POST` | `/api/pipeline/runs`                      | `202` with `{ "executionId": ... }`; `400` invalid body; `503` DB unavailable   |
-| `GET`  | `/api/pipeline/runs/{executionId}`        | `200` run status and counts; `404` unknown ID                                   |
-| `GET`  | `/api/pipeline/runs/{executionId}/report` | `200` full per-candidate report; `404` unknown ID; `409` run not finished yet   |
-| `POST` | `/api/pipeline/runs/{executionId}/cancel` | `202` best-effort cancel; `404` unknown ID; `409` run already finished          |
+| Method | Path                                      | Result                                                                                             |
+| ------ | ----------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `POST` | `/api/pipeline/runs`                      | `202` with `{ "executionId": ... }`; `400` invalid body; `503` DB unavailable                      |
+| `GET`  | `/api/pipeline/runs/{executionId}`        | `200` run status and counts; `404` unknown ID                                                      |
+| `GET`  | `/api/pipeline/runs/{executionId}/report` | `200` full per-candidate report; `404` unknown ID; `409` run not finished yet                      |
+| `POST` | `/api/pipeline/runs/{executionId}/cancel` | `202` `{ executionId, outcome }`, best-effort cancel; `404` unknown ID; `409` run already finished |
 
 Request body for `POST /api/pipeline/runs` (only `repositoryUrl` is required):
 
-| Field                    | Description                                      | Default                |
-| ------------------------ | ------------------------------------------------ | ---------------------- |
-| `repositoryUrl`          | Git URL of the Java repository to analyze        | _(required)_           |
-| `revision`               | Branch, tag, or commit                           | repository's default   |
-| `contextEnabled`         | Enrich SATD with issue-tracker context           | `false`                |
-| `allowHeuristicFallback` | Allow a heuristic classifier if models fail      | `false`                |
-| `testFramework`          | Target test framework for generation             | `JUnit 5`              |
+| Field                    | Description                                 | Default              |
+| ------------------------ | ------------------------------------------- | -------------------- |
+| `repositoryUrl`          | Git URL of the Java repository to analyze   | _(required)_         |
+| `revision`               | Branch, tag, or commit                      | repository's default |
+| `contextEnabled`         | Enrich SATD with issue-tracker context      | `false`              |
+| `allowHeuristicFallback` | Allow a heuristic classifier if models fail | `false`              |
+| `testFramework`          | Target test framework for generation        | `JUnit 5`            |
 
 ```bash
 # Start a run

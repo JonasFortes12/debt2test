@@ -650,15 +650,27 @@ domain `runId` carried inside `PipelineRequest`/`PipelineResult`. This mirrors t
 `PipelineRunStore` port, which is already keyed by `executionId` throughout (see §8).
 
 Execution is always asynchronous: `POST /api/pipeline/runs` calls
-`PipelineApplicationService.allocate(request)` to record the run and mint the execution ID, then
-hands the request to `PipelineRunLauncher`, which submits it to a single background thread and
-returns immediately. The endpoint responds `202 Accepted` with the execution ID before the
+`PipelineApplicationService.allocate(request)` to record the run as `QUEUED`
+(`PipelineRunStore.runQueued`) and mint the execution ID, then hands the request to
+`PipelineRunLauncher`, which submits it to a single background thread and returns immediately.
+When the worker picks the run up, `execute` moves it to `RUNNING` (`runDequeued`). The CLI path
+(`run`) still records `RUNNING` directly via `runStarted`. The endpoint responds `202 Accepted` with the execution ID before the
 pipeline runs; there is no synchronous execution path. `GET /api/pipeline/runs/{executionId}` and
 `GET /api/pipeline/runs/{executionId}/report` read state back through the read methods added to
 `PipelineRunStore` — `findRun` (run status and counts) and `findReport` (full report once
 finished) — rather than reconstructing a `PipelineResult` in memory. `POST
 /api/pipeline/runs/{executionId}/cancel` performs a best-effort `Future.cancel(true)` plus an
-unconditional `PipelineRunStore.runCancelled` write; it does not guarantee in-flight work stops.
+unconditional `PipelineRunStore.runCancelled` write and returns `{executionId, outcome}`
+(`ACCEPTED` or `UNKNOWN`); it does not guarantee in-flight work stops. A terminal run's record is
+frozen: the store ignores every later stage or `runFinished` write, so `CANCELLED` stays
+`CANCELLED` and a fetched report never changes.
+
+The HTTP contract is typed and uniform: `RunReportItem` in `debt-core` carries `ContextStatus`
+and `ItemStatus` (not strings) plus structured `PipelineError`s, and `RunReport` carries the
+run-level errors that explain a `FAILED` run. These were deliberate shared-domain changes (see
+`docs/superpowers/specs/2026-11-02-api-swagger-contract-design.md`, D-2–D-4, D-12, D-13). Every
+non-2xx response is an `ApiError { message, fieldErrors[] }`. The Swagger docs are part of the
+contract and are kept complete by `OpenApiDocumentationCompletenessTest` (see `CLAUDE.md`).
 
 `debt-api` requires `DEBT_PERSISTENCE_ENABLED=true` to start, since `GET` endpoints have no
 in-memory fallback to read from.

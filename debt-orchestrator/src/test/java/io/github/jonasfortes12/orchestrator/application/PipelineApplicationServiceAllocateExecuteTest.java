@@ -6,10 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -48,14 +47,37 @@ class PipelineApplicationServiceAllocateExecuteTest {
         Optional<RunSnapshot> snapshot = store.findRun(executionId);
         assertTrue(snapshot.isPresent(),
                 "the row must exist as soon as allocate() returns, before execute() is ever called");
-        assertEquals(RunStatus.RUNNING, snapshot.orElseThrow().status());
+        assertEquals(RunStatus.QUEUED, snapshot.orElseThrow().status());
+        assertTrue(store.started.isEmpty(), "allocate() must queue the run, not start it");
+    }
+
+    @Test
+    void executeDequeuesTheRunBeforeTheFirstStage(@TempDir Path outputDirectory) {
+        FakeRunStore store = new FakeRunStore();
+        RunStoreScenario scenario = RunStoreScenario.happyPath(outputDirectory);
+        PipelineApplicationService service = scenario.service(store);
+
+        String executionId = service.allocate(scenario.request());
+        service.execute(executionId, scenario.request());
+
+        assertEquals(List.of(executionId), store.dequeued);
+        assertEquals(RunStatus.RUNNING, store.findRun(executionId).orElseThrow().status());
+    }
+
+    @Test
+    void runStillRecordsRunStartedDirectly(@TempDir Path outputDirectory) {
+        FakeRunStore store = new FakeRunStore();
+        RunStoreScenario.happyPath(outputDirectory).runWith(store);
+
+        assertEquals(1, store.started.size());
+        assertTrue(store.queued.isEmpty(), "the CLI path never queues");
     }
 
     @Test
     void allocateThrowsWhenTheStoreCannotRecordTheStart(@TempDir Path outputDirectory) {
         PipelineRunStore explodingStore = new PipelineRunStore() {
             @Override
-            public void runStarted(String executionId, PipelineRequest request) {
+            public void runQueued(String executionId, PipelineRequest request) {
                 throw new IllegalStateException("database is down");
             }
         };
@@ -65,13 +87,18 @@ class PipelineApplicationServiceAllocateExecuteTest {
         assertThrows(PipelineException.class, () -> service.allocate(scenario.request()));
     }
 
-    /** Everything defaults to a no-op; only used where the store's behavior is irrelevant. */
+    /**
+     * Everything defaults to a no-op; only used where the store's behavior is
+     * irrelevant.
+     */
     private static final class NoOpTrackingStore implements PipelineRunStore {
     }
 
-    /** Tracks started execution IDs so findRun can answer before execute() ever runs. */
+    /** Tracks lifecycle calls so findRun can answer before execute() ever runs. */
     private static final class FakeRunStore implements PipelineRunStore {
-        private final Set<String> started = new HashSet<>();
+        private final List<String> started = new ArrayList<>();
+        private final List<String> queued = new ArrayList<>();
+        private final List<String> dequeued = new ArrayList<>();
 
         @Override
         public void runStarted(String executionId, PipelineRequest request) {
@@ -79,12 +106,27 @@ class PipelineApplicationServiceAllocateExecuteTest {
         }
 
         @Override
+        public void runQueued(String executionId, PipelineRequest request) {
+            queued.add(executionId);
+        }
+
+        @Override
+        public void runDequeued(String executionId) {
+            dequeued.add(executionId);
+        }
+
+        @Override
         public Optional<RunSnapshot> findRun(String executionId) {
-            if (!started.contains(executionId)) {
+            RunStatus status;
+            if (started.contains(executionId) || dequeued.contains(executionId)) {
+                status = RunStatus.RUNNING;
+            } else if (queued.contains(executionId)) {
+                status = RunStatus.QUEUED;
+            } else {
                 return Optional.empty();
             }
             return Optional.of(new RunSnapshot(
-                    executionId, null, RunStatus.RUNNING, Instant.now(), null, 0, 0, 0, List.of()));
+                    executionId, null, status, Instant.now(), null, 0, 0, 0, List.of()));
         }
     }
 }

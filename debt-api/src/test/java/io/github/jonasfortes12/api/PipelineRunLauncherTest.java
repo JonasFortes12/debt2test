@@ -53,12 +53,12 @@ class PipelineRunLauncherTest {
     }
 
     private static final class RecordingRunStore implements PipelineRunStore {
-        private final List<String> startedIds = new CopyOnWriteArrayList<>();
+        private final List<String> queuedIds = new CopyOnWriteArrayList<>();
         private final List<String> cancelledIds = new CopyOnWriteArrayList<>();
 
         @Override
-        public void runStarted(String executionId, PipelineRequest request) {
-            startedIds.add(executionId);
+        public void runQueued(String executionId, PipelineRequest request) {
+            queuedIds.add(executionId);
         }
 
         @Override
@@ -67,7 +67,10 @@ class PipelineRunLauncherTest {
         }
     }
 
-    /** A service whose workspace preparation blocks until the test releases it, to observe async submit(). */
+    /**
+     * A service whose workspace preparation blocks until the test releases it, to
+     * observe async submit().
+     */
     private PipelineApplicationService blockingService(
             PipelineRunStore store, CountDownLatch startedLatch, CountDownLatch releaseLatch) {
         RepositoryWorkspaceProvider workspaceProvider = new RepositoryWorkspaceProvider() {
@@ -102,7 +105,8 @@ class PipelineRunLauncherTest {
                     }
                 },
                 (req, workspace) -> req.runId().equals(PipelineApplicationService.AUTOMATIC_RUN_ID)
-                        ? "resolved-run" : req.runId(),
+                        ? "resolved-run"
+                        : req.runId(),
                 store);
     }
 
@@ -116,7 +120,7 @@ class PipelineRunLauncherTest {
         try {
             String executionId = launcher.submit(request());
 
-            assertEquals(List.of(executionId), store.startedIds,
+            assertEquals(List.of(executionId), store.queuedIds,
                     "allocate() must have recorded the run before submit() returns");
             assertTrue(startedLatch.await(2, TimeUnit.SECONDS),
                     "execute() must run on the background thread without blocking submit()");

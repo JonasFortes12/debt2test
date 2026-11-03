@@ -31,6 +31,7 @@ import io.github.jonasfortes12.core.model.RunStatus;
 import io.github.jonasfortes12.core.model.TestGenerationOptions;
 import io.github.jonasfortes12.core.port.ContextEnricher;
 import io.github.jonasfortes12.core.port.DebtClassifier;
+import io.github.jonasfortes12.core.port.PipelineRunStore;
 import io.github.jonasfortes12.core.port.ReportSink;
 import io.github.jonasfortes12.core.port.RepositoryWorkspaceProvider;
 import io.github.jonasfortes12.core.port.SatdExtractor;
@@ -39,7 +40,6 @@ import io.github.jonasfortes12.core.util.UrlSanitizer;
 import io.github.jonasfortes12.extractor.AstCommentExtractor;
 import io.github.jonasfortes12.extractor.GitCloneService;
 import io.github.jonasfortes12.orchestrator.application.PipelineApplicationService;
-import io.github.jonasfortes12.core.port.PipelineRunStore;
 import io.github.jonasfortes12.orchestrator.persistence.PersistenceContext;
 import io.github.jonasfortes12.orchestrator.reporting.CompositeReportSink;
 import io.github.jonasfortes12.orchestrator.reporting.FileReportSink;
@@ -139,7 +139,7 @@ public final class AppOrchestrator {
                 resolvedEndpoint(llmConfig),
                 "allowHeuristicFallback=true",
                 "contextEnabled=true",
-                "framework=JUnit 5",
+                "framework=" + TestGenerationOptions.DEFAULT_FRAMEWORK,
                 "promptVersion=" + TestGeneratorService.PROMPT_VERSION);
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")
@@ -165,7 +165,7 @@ public final class AppOrchestrator {
                 new ExtractionOptions(runId),
                 new ClassificationOptions(true),
                 new ContextRequest(true),
-                new TestGenerationOptions("JUnit 5"),
+                new TestGenerationOptions(TestGenerationOptions.DEFAULT_FRAMEWORK),
                 new ReportOptions(options.outputDirectory()));
     }
 
@@ -174,8 +174,10 @@ public final class AppOrchestrator {
     }
 
     /**
-     * Builds {@link LlmConfig} internally so callers outside this reactor's {@code debt-tester}
-     * dependency chain (e.g. {@code debt-api}) never need to import a feature-module type just to
+     * Builds {@link LlmConfig} internally so callers outside this reactor's
+     * {@code debt-tester}
+     * dependency chain (e.g. {@code debt-api}) never need to import a
+     * feature-module type just to
      * assemble the application.
      */
     public static PipelineApplicationService createApplication(

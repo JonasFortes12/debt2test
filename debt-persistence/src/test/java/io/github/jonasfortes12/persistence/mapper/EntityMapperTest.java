@@ -211,8 +211,10 @@ class EntityMapperTest {
         assertEquals("JIRA-1", item.taskKey());
         assertEquals("Fix it", item.taskSummary());
         assertEquals("class Test {}", item.generatedTestSourceCode());
-        assertEquals("GENERATED", item.testStatus());
+        assertEquals(ContextStatus.MATCHED, item.contextStatus());
+        assertEquals(ItemStatus.GENERATED, item.testStatus());
         assertTrue(item.errorMessages().isEmpty());
+        assertTrue(item.errors().isEmpty());
     }
 
     @Test
@@ -227,7 +229,11 @@ class EntityMapperTest {
         debt.setDebtType("NON_SATD");
 
         PipelineErrorEntity error = new PipelineErrorEntity();
+        error.setStage("classification");
+        error.setCode("CLASSIFIER_MODEL_UNAVAILABLE");
         error.setMessage("classification unavailable");
+        error.setCandidateId("candidate-2");
+        error.setRecoverable(true);
 
         RunReportItem item = EntityMapper.toReportItem(debt, List.of(error));
 
@@ -236,5 +242,7 @@ class EntityMapperTest {
         assertNull(item.generatedTestSourceCode());
         assertNull(item.testStatus());
         assertEquals(List.of("classification unavailable"), item.errorMessages());
+        assertEquals(List.of(new PipelineError("classification", "CLASSIFIER_MODEL_UNAVAILABLE",
+                "classification unavailable", "candidate-2", true)), item.errors());
     }
 }

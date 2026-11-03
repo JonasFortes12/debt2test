@@ -42,6 +42,7 @@ import io.github.jonasfortes12.core.model.Provenance;
 import io.github.jonasfortes12.core.model.ReportOptions;
 import io.github.jonasfortes12.core.model.RepositoryRequest;
 import io.github.jonasfortes12.core.model.RepositoryWorkspace;
+import io.github.jonasfortes12.core.model.RunReport;
 import io.github.jonasfortes12.core.model.RunStatus;
 import io.github.jonasfortes12.core.model.SatdCandidate;
 import io.github.jonasfortes12.core.model.SourceProvenance;
@@ -65,216 +66,272 @@ import io.github.jonasfortes12.persistence.repository.TechnicalDebtRepository;
 @ActiveProfiles("test")
 class RunStoreRoundTripIntegrationTest {
 
-    private static final String REPO = "https://example.com/repo.git";
+        private static final String REPO = "https://example.com/repo.git";
 
-    @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+        @Container
+        static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
 
-    @DynamicPropertySource
-    static void datasource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        registry.add("spring.datasource.username", POSTGRES::getUsername);
-        registry.add("spring.datasource.password", POSTGRES::getPassword);
-    }
+        @DynamicPropertySource
+        static void datasource(DynamicPropertyRegistry registry) {
+                registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+                registry.add("spring.datasource.username", POSTGRES::getUsername);
+                registry.add("spring.datasource.password", POSTGRES::getPassword);
+        }
 
-    @Autowired private DatabasePipelineRunStore store;
-    @Autowired private PipelineRunRepository runs;
-    @Autowired private TechnicalDebtRepository debts;
-    @Autowired private DebtContextRepository contexts;
-    @Autowired private GeneratedTestRepository tests;
-    @Autowired private PipelineErrorRepository errors;
+        @Autowired
+        private DatabasePipelineRunStore store;
+        @Autowired
+        private PipelineRunRepository runs;
+        @Autowired
+        private TechnicalDebtRepository debts;
+        @Autowired
+        private DebtContextRepository contexts;
+        @Autowired
+        private GeneratedTestRepository tests;
+        @Autowired
+        private PipelineErrorRepository errors;
 
-    private static PipelineRequest request() {
-        return new PipelineRequest(
-                "run-1",
-                new RepositoryRequest(REPO, "main"),
-                new ExtractionOptions("run-1"),
-                new ClassificationOptions(true),
-                new ContextRequest(true),
-                new TestGenerationOptions("junit5"),
-                new ReportOptions(Path.of("output")));
-    }
+        private static PipelineRequest request() {
+                return new PipelineRequest(
+                                "run-1",
+                                new RepositoryRequest(REPO, "main"),
+                                new ExtractionOptions("run-1"),
+                                new ClassificationOptions(true),
+                                new ContextRequest(true),
+                                new TestGenerationOptions("junit5"),
+                                new ReportOptions(Path.of("output")));
+        }
 
-    private static RepositoryWorkspace workspace() {
-        return new RepositoryWorkspace(Path.of("/tmp/ws"), REPO, "abc123");
-    }
+        private static RepositoryWorkspace workspace() {
+                return new RepositoryWorkspace(Path.of("/tmp/ws"), REPO, "abc123");
+        }
 
-    private static SatdCandidate candidate(String id, int line) {
-        return new SatdCandidate(
-                id,
-                "src/main/java/Example.java",
-                "doWork",
-                line,
-                "// TODO fix this",
-                "void doWork() { }",
-                new SourceProvenance(REPO, "abc123", "src/main/java/Example.java"));
-    }
+        private static SatdCandidate candidate(String id, int line) {
+                return new SatdCandidate(
+                                id,
+                                "src/main/java/Example.java",
+                                "doWork",
+                                line,
+                                "// TODO fix this",
+                                "void doWork() { }",
+                                new SourceProvenance(REPO, "abc123", "src/main/java/Example.java"));
+        }
 
-    private static SatdCandidate matchedCandidate() { return candidate("candidate-matched", 12); }
-    private static SatdCandidate unmatchedCandidate() { return candidate("candidate-unmatched", 34); }
-    private static SatdCandidate notSatdCandidate() { return candidate("candidate-not-satd", 56); }
+        private static SatdCandidate matchedCandidate() {
+                return candidate("candidate-matched", 12);
+        }
 
-    private static ClassifiedDebt satd(SatdCandidate candidate) {
-        return new ClassifiedDebt(candidate, true, "DESIGN", 0.91,
-                new Provenance("weka", "debthunter", "1.0"), ItemStatus.CLASSIFIED, List.of());
-    }
+        private static SatdCandidate unmatchedCandidate() {
+                return candidate("candidate-unmatched", 34);
+        }
 
-    private static ClassifiedDebt matchedClassified() { return satd(matchedCandidate()); }
-    private static ClassifiedDebt unmatchedClassified() { return satd(unmatchedCandidate()); }
+        private static SatdCandidate notSatdCandidate() {
+                return candidate("candidate-not-satd", 56);
+        }
 
-    private static ClassifiedDebt notSatdClassified() {
-        return new ClassifiedDebt(notSatdCandidate(), false, "NON_SATD", 0.12,
-                new Provenance("weka", "debthunter", "1.0"), ItemStatus.NOT_SATD, List.of());
-    }
+        private static ClassifiedDebt satd(SatdCandidate candidate) {
+                return new ClassifiedDebt(candidate, true, "DESIGN", 0.91,
+                                new Provenance("weka", "debthunter", "1.0"), ItemStatus.CLASSIFIED, List.of());
+        }
 
-    private static EnrichedSatdDebt matchedEnriched() {
-        return new EnrichedSatdDebt(
-                matchedClassified(),
-                new ExternalTaskSpec("jira", "DUBBO-1234", "Fix it", "Long description",
-                        List.of("criterion one"), List.of("bug"), "https://jira/DUBBO-1234"),
-                List.of(new ExternalReference("DUBBO-1234", "comment")),
-                ContextStatus.MATCHED,
-                List.of());
-    }
+        private static ClassifiedDebt matchedClassified() {
+                return satd(matchedCandidate());
+        }
 
-    private static EnrichedSatdDebt unmatchedEnriched() {
-        return new EnrichedSatdDebt(
-                unmatchedClassified(), null, List.of(), ContextStatus.NOT_FOUND, List.of());
-    }
+        private static ClassifiedDebt unmatchedClassified() {
+                return satd(unmatchedCandidate());
+        }
 
-    private static GeneratedTest generatedTest() {
-        return new GeneratedTest("candidate-matched", "class ExampleTest { }", "junit5",
-                "openai", "gpt-test", "v1", ItemStatus.GENERATED, ValidationStatus.NOT_RUN, List.of());
-    }
+        private static ClassifiedDebt notSatdClassified() {
+                return new ClassifiedDebt(notSatdCandidate(), false, "NON_SATD", 0.12,
+                                new Provenance("weka", "debthunter", "1.0"), ItemStatus.NOT_SATD, List.of());
+        }
 
-    private static GeneratedTest failedTest() {
-        return new GeneratedTest("candidate-unmatched", null, "junit5", "openai", "gpt-test", "v1",
-                ItemStatus.GENERATION_FAILED, ValidationStatus.NOT_RUN,
-                List.of(new PipelineError("generation", "LLM_GENERATION_FAILED", "boom",
-                        "candidate-unmatched", true)));
-    }
+        private static EnrichedSatdDebt matchedEnriched() {
+                return new EnrichedSatdDebt(
+                                matchedClassified(),
+                                new ExternalTaskSpec("jira", "DUBBO-1234", "Fix it", "Long description",
+                                                List.of("criterion one"), List.of("bug"), "https://jira/DUBBO-1234"),
+                                List.of(new ExternalReference("DUBBO-1234", "comment")),
+                                ContextStatus.MATCHED,
+                                List.of());
+        }
 
-    private static PipelineResult completedResult() {
-        List<PipelineItemResult> items = List.of(
-                new PipelineItemResult(matchedCandidate(), matchedClassified(), matchedEnriched(),
-                        generatedTest(), List.of()),
-                new PipelineItemResult(unmatchedCandidate(), unmatchedClassified(), unmatchedEnriched(),
-                        failedTest(), List.of()),
-                new PipelineItemResult(notSatdCandidate(), notSatdClassified(), null, null, List.of()));
-        List<PipelineError> runErrors = List.of(
-                new PipelineError("repository", "WORKSPACE_RELEASE_FAILED", "release failed", null, true),
-                new PipelineError("generation", "LLM_GENERATION_FAILED", "boom", "candidate-unmatched", true));
-        return new PipelineResult("run-1", RunStatus.COMPLETED_WITH_ERRORS, workspace(), items,
-                runErrors, null);
-    }
+        private static EnrichedSatdDebt unmatchedEnriched() {
+                return new EnrichedSatdDebt(
+                                unmatchedClassified(), null, List.of(), ContextStatus.NOT_FOUND, List.of());
+        }
 
-    @Test
-    void aCompleteRunSurvivesARoundTrip() {
-        String executionId = UUID.randomUUID().toString();
+        private static GeneratedTest generatedTest() {
+                return new GeneratedTest("candidate-matched", "class ExampleTest { }", "junit5",
+                                "openai", "gpt-test", "v1", ItemStatus.GENERATED, ValidationStatus.NOT_RUN, List.of());
+        }
 
-        store.runStarted(executionId, request());
-        store.workspaceReady(executionId, workspace());
-        store.runIdResolved(executionId, "run-1");
-        store.candidatesExtracted(executionId,
-                List.of(matchedCandidate(), unmatchedCandidate(), notSatdCandidate()));
-        store.candidatesClassified(executionId,
-                List.of(matchedClassified(), unmatchedClassified(), notSatdClassified()));
-        store.contextEnriched(executionId, List.of(matchedEnriched(), unmatchedEnriched()));
-        store.testsGenerated(executionId, List.of(generatedTest(), failedTest()));
-        store.runFinished(executionId, completedResult());
+        private static GeneratedTest failedTest() {
+                return new GeneratedTest("candidate-unmatched", null, "junit5", "openai", "gpt-test", "v1",
+                                ItemStatus.GENERATION_FAILED, ValidationStatus.NOT_RUN,
+                                List.of(new PipelineError("generation", "LLM_GENERATION_FAILED", "boom",
+                                                "candidate-unmatched", true)));
+        }
 
-        PipelineRunEntity run = runs.findById(UUID.fromString(executionId)).orElseThrow();
-        assertEquals("run-1", run.getRunId());
-        assertEquals(RunStatus.COMPLETED_WITH_ERRORS, run.getStatus());
-        assertEquals("abc123", run.getResolvedRevision());
-        assertEquals(3, run.getCandidateCount());
-        assertEquals(2, run.getSatdCount());
-        assertEquals(1, run.getGeneratedTestCount());
-        assertNotNull(run.getFinishedAt());
+        private static PipelineResult completedResult() {
+                List<PipelineItemResult> items = List.of(
+                                new PipelineItemResult(matchedCandidate(), matchedClassified(), matchedEnriched(),
+                                                generatedTest(), List.of()),
+                                new PipelineItemResult(unmatchedCandidate(), unmatchedClassified(), unmatchedEnriched(),
+                                                failedTest(), List.of()),
+                                new PipelineItemResult(notSatdCandidate(), notSatdClassified(), null, null, List.of()));
+                List<PipelineError> runErrors = List.of(
+                                new PipelineError("repository", "WORKSPACE_RELEASE_FAILED", "release failed", null,
+                                                true),
+                                new PipelineError("generation", "LLM_GENERATION_FAILED", "boom", "candidate-unmatched",
+                                                true));
+                return new PipelineResult("run-1", RunStatus.COMPLETED_WITH_ERRORS, workspace(), items,
+                                runErrors, null);
+        }
 
-        List<TechnicalDebtEntity> stored = debts.findByRun_Id(run.getId(), Pageable.unpaged()).getContent();
-        assertEquals(3, stored.size(), "non-SATD candidates must be stored too");
+        @Test
+        void aCompleteRunSurvivesARoundTrip() {
+                String executionId = UUID.randomUUID().toString();
 
-        TechnicalDebtEntity matched = byCandidateId(stored, "candidate-matched");
-        assertEquals(0.91, matched.getConfidence());
-        assertEquals("weka", matched.getClassifierProvider());
-        assertEquals(ContextStatus.MATCHED,
-                contexts.findByTechnicalDebt_Id(matched.getId()).orElseThrow().getContextStatus());
-        assertEquals(ItemStatus.GENERATED,
-                tests.findByTechnicalDebt_Id(matched.getId()).orElseThrow().getStatus());
+                store.runStarted(executionId, request());
+                store.workspaceReady(executionId, workspace());
+                store.runIdResolved(executionId, "run-1");
+                store.candidatesExtracted(executionId,
+                                List.of(matchedCandidate(), unmatchedCandidate(), notSatdCandidate()));
+                store.candidatesClassified(executionId,
+                                List.of(matchedClassified(), unmatchedClassified(), notSatdClassified()));
+                store.contextEnriched(executionId, List.of(matchedEnriched(), unmatchedEnriched()));
+                store.testsGenerated(executionId, List.of(generatedTest(), failedTest()));
+                store.runFinished(executionId, completedResult());
 
-        TechnicalDebtEntity notSatd = byCandidateId(stored, "candidate-not-satd");
-        assertFalse(notSatd.getSatd());
-        assertTrue(contexts.findByTechnicalDebt_Id(notSatd.getId()).isEmpty());
+                PipelineRunEntity run = runs.findById(UUID.fromString(executionId)).orElseThrow();
+                assertEquals("run-1", run.getRunId());
+                assertEquals(RunStatus.COMPLETED_WITH_ERRORS, run.getStatus());
+                assertEquals("abc123", run.getResolvedRevision());
+                assertEquals(3, run.getCandidateCount());
+                assertEquals(2, run.getSatdCount());
+                assertEquals(1, run.getGeneratedTestCount());
+                assertNotNull(run.getFinishedAt());
 
-        List<PipelineErrorEntity> storedErrors = errors.findByRun_Id(run.getId());
-        assertEquals(2, storedErrors.size());
-        assertTrue(storedErrors.stream().anyMatch(e -> e.getTechnicalDebt() != null),
-                "an item-level error must be linked to its debt row");
-        assertTrue(storedErrors.stream().anyMatch(e -> e.getTechnicalDebt() == null),
-                "a run-level error must have no debt link");
-    }
+                List<TechnicalDebtEntity> stored = debts.findByRun_Id(run.getId(), Pageable.unpaged()).getContent();
+                assertEquals(3, stored.size(), "non-SATD candidates must be stored too");
 
-    @Test
-    void theStoredGraphMapsBackToEquivalentDomainRecords() {
-        String executionId = UUID.randomUUID().toString();
-        store.runStarted(executionId, request());
-        store.runIdResolved(executionId, "run-1");
-        store.candidatesExtracted(executionId, List.of(matchedCandidate()));
-        store.candidatesClassified(executionId, List.of(matchedClassified()));
-        store.contextEnriched(executionId, List.of(matchedEnriched()));
-        store.testsGenerated(executionId, List.of(generatedTest()));
+                TechnicalDebtEntity matched = byCandidateId(stored, "candidate-matched");
+                assertEquals(0.91, matched.getConfidence());
+                assertEquals("weka", matched.getClassifierProvider());
+                assertEquals(ContextStatus.MATCHED,
+                                contexts.findByTechnicalDebt_Id(matched.getId()).orElseThrow().getContextStatus());
+                assertEquals(ItemStatus.GENERATED,
+                                tests.findByTechnicalDebt_Id(matched.getId()).orElseThrow().getStatus());
 
-        TechnicalDebtEntity stored = debts.findAll().get(0);
+                TechnicalDebtEntity notSatd = byCandidateId(stored, "candidate-not-satd");
+                assertFalse(notSatd.getSatd());
+                assertTrue(contexts.findByTechnicalDebt_Id(notSatd.getId()).isEmpty());
 
-        SatdCandidate candidate = DomainMapper.toCandidate(stored);
-        assertEquals(matchedCandidate().candidateId(), candidate.candidateId());
-        assertEquals(matchedCandidate().lineNumber(), candidate.lineNumber());
-        assertEquals(matchedCandidate().methodSourceCode(), candidate.methodSourceCode());
+                List<PipelineErrorEntity> storedErrors = errors.findByRun_Id(run.getId());
+                assertEquals(2, storedErrors.size());
+                assertTrue(storedErrors.stream().anyMatch(e -> e.getTechnicalDebt() != null),
+                                "an item-level error must be linked to its debt row");
+                assertTrue(storedErrors.stream().anyMatch(e -> e.getTechnicalDebt() == null),
+                                "a run-level error must have no debt link");
+        }
 
-        ClassifiedDebt classified = DomainMapper.toClassifiedDebt(stored, candidate);
-        assertEquals(0.91, classified.confidence());
-        assertEquals("weka", classified.provenance().provider());
-        assertEquals("debthunter", classified.provenance().strategy());
-        assertEquals(ItemStatus.CLASSIFIED, classified.status());
+        @Test
+        void theStoredGraphMapsBackToEquivalentDomainRecords() {
+                String executionId = UUID.randomUUID().toString();
+                store.runStarted(executionId, request());
+                store.runIdResolved(executionId, "run-1");
+                store.candidatesExtracted(executionId, List.of(matchedCandidate()));
+                store.candidatesClassified(executionId, List.of(matchedClassified()));
+                store.contextEnriched(executionId, List.of(matchedEnriched()));
+                store.testsGenerated(executionId, List.of(generatedTest()));
 
-        EnrichedSatdDebt enriched = DomainMapper.toEnrichedDebt(
-                contexts.findByTechnicalDebt_Id(stored.getId()).orElseThrow(), classified);
-        assertEquals(ContextStatus.MATCHED, enriched.contextStatus());
-        assertEquals("DUBBO-1234", enriched.externalTask().key());
-        assertEquals(List.of("criterion one"), enriched.externalTask().acceptanceCriteria());
+                TechnicalDebtEntity stored = debts.findAll().get(0);
 
-        GeneratedTest test = DomainMapper.toGeneratedTest(
-                tests.findByTechnicalDebt_Id(stored.getId()).orElseThrow(), stored.getCandidateId());
-        assertEquals("gpt-test", test.model());
-        assertEquals("v1", test.promptVersion());
-    }
+                SatdCandidate candidate = DomainMapper.toCandidate(stored);
+                assertEquals(matchedCandidate().candidateId(), candidate.candidateId());
+                assertEquals(matchedCandidate().lineNumber(), candidate.lineNumber());
+                assertEquals(matchedCandidate().methodSourceCode(), candidate.methodSourceCode());
 
-    @Test
-    void replayingAStageDoesNotDuplicateRows() {
-        String executionId = UUID.randomUUID().toString();
-        store.runStarted(executionId, request());
-        store.candidatesExtracted(executionId, List.of(matchedCandidate()));
-        store.candidatesExtracted(executionId, List.of(matchedCandidate()));
+                ClassifiedDebt classified = DomainMapper.toClassifiedDebt(stored, candidate);
+                assertEquals(0.91, classified.confidence());
+                assertEquals("weka", classified.provenance().provider());
+                assertEquals("debthunter", classified.provenance().strategy());
+                assertEquals(ItemStatus.CLASSIFIED, classified.status());
 
-        assertEquals(1, debts.count(), "the (pipeline_run_id, candidate_id) key makes hooks idempotent");
-    }
+                EnrichedSatdDebt enriched = DomainMapper.toEnrichedDebt(
+                                contexts.findByTechnicalDebt_Id(stored.getId()).orElseThrow(), classified);
+                assertEquals(ContextStatus.MATCHED, enriched.contextStatus());
+                assertEquals("DUBBO-1234", enriched.externalTask().key());
+                assertEquals(List.of("criterion one"), enriched.externalTask().acceptanceCriteria());
 
-    @Test
-    void classificationUpdatesTheExistingRowRatherThanInserting() {
-        String executionId = UUID.randomUUID().toString();
-        store.runStarted(executionId, request());
-        store.candidatesExtracted(executionId, List.of(matchedCandidate()));
-        store.candidatesClassified(executionId, List.of(matchedClassified()));
+                GeneratedTest test = DomainMapper.toGeneratedTest(
+                                tests.findByTechnicalDebt_Id(stored.getId()).orElseThrow(), stored.getCandidateId());
+                assertEquals("gpt-test", test.model());
+                assertEquals("v1", test.promptVersion());
+        }
 
-        assertEquals(1, debts.count());
-        assertTrue(debts.findAll().get(0).getSatd());
-    }
+        @Test
+        void replayingAStageDoesNotDuplicateRows() {
+                String executionId = UUID.randomUUID().toString();
+                store.runStarted(executionId, request());
+                store.candidatesExtracted(executionId, List.of(matchedCandidate()));
+                store.candidatesExtracted(executionId, List.of(matchedCandidate()));
 
-    private static TechnicalDebtEntity byCandidateId(List<TechnicalDebtEntity> all, String id) {
-        return all.stream()
-                .filter(debt -> id.equals(debt.getCandidateId()))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("no stored debt for " + id));
-    }
+                assertEquals(1, debts.count(), "the (pipeline_run_id, candidate_id) key makes hooks idempotent");
+        }
+
+        @Test
+        void classificationUpdatesTheExistingRowRatherThanInserting() {
+                String executionId = UUID.randomUUID().toString();
+                store.runStarted(executionId, request());
+                store.candidatesExtracted(executionId, List.of(matchedCandidate()));
+                store.candidatesClassified(executionId, List.of(matchedClassified()));
+
+                assertEquals(1, debts.count());
+                assertTrue(debts.findAll().get(0).getSatd());
+        }
+
+        private static TechnicalDebtEntity byCandidateId(List<TechnicalDebtEntity> all, String id) {
+                return all.stream()
+                                .filter(debt -> id.equals(debt.getCandidateId()))
+                                .findFirst()
+                                .orElseThrow(() -> new AssertionError("no stored debt for " + id));
+        }
+
+        @Test
+        void aQueuedRunCancelledBeforeItFinishesStaysCancelled() {
+                String executionId = UUID.randomUUID().toString();
+                store.runQueued(executionId, request());
+                assertEquals(RunStatus.QUEUED, store.findRun(executionId).orElseThrow().status());
+
+                store.runDequeued(executionId);
+                assertEquals(RunStatus.RUNNING, store.findRun(executionId).orElseThrow().status());
+
+                store.runCancelled(executionId);
+                store.candidatesExtracted(executionId, List.of(matchedCandidate()));
+                store.runFinished(executionId, new PipelineResult("run-1", RunStatus.COMPLETED, null, List.of(),
+                                List.of(), null));
+
+                assertEquals(RunStatus.CANCELLED, store.findRun(executionId).orElseThrow().status());
+                assertTrue(store.findReport(executionId).orElseThrow().items().isEmpty());
+        }
+
+        @Test
+        void aFailedRunReportsItsRunLevelErrors() {
+                String executionId = UUID.randomUUID().toString();
+                store.runStarted(executionId, request());
+                PipelineError cloneFailure = new PipelineError(
+                                "repository", "WORKSPACE_PREPARATION_FAILED", "repository could not be cloned", null,
+                                false);
+
+                store.runFinished(executionId, new PipelineResult("run-1", RunStatus.FAILED, null, List.of(),
+                                List.of(cloneFailure), null));
+
+                RunReport report = store.findReport(executionId).orElseThrow();
+                assertEquals(RunStatus.FAILED, report.summary().status());
+                assertTrue(report.items().isEmpty());
+                assertEquals(List.of(cloneFailure), report.errors());
+        }
 }

@@ -1,6 +1,6 @@
 {
   "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
-  "status": "COMPLETED_WITH_ERRORS",
+  "status": "FAILED",
   "errors": [
     {
       "stage": "extraction",
@@ -12,6 +12,20 @@
     {
       "stage": "classification",
       "code": "CLASSIFIER_MODEL_FALLBACK",
+      "candidateId": null,
+      "recoverable": true,
+      "message": "pipeline error recorded"
+    },
+    {
+      "stage": "generation",
+      "code": "LLM_RESPONSE_INVALID",
+      "candidateId": null,
+      "recoverable": false,
+      "message": "pipeline error recorded"
+    },
+    {
+      "stage": "generation",
+      "code": "LLM_TRANSPORT_FAILED",
       "candidateId": null,
       "recoverable": true,
       "message": "pipeline error recorded"
@@ -157,7 +171,15 @@
         "strategy": "heuristic-fallback",
         "version": "unavailable"
       },
-      "errors": [],
+      "errors": [
+        {
+          "stage": "generation",
+          "code": "LLM_RESPONSE_INVALID",
+          "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/database/ConnectionPoolTest.java:32:5:shouldNotExceedPoolSizeOnRelease:ConnectionPoolTest:shouldNotExceedPoolSizeOnRelease()",
+          "recoverable": false,
+          "message": "pipeline error recorded"
+        }
+      ],
       "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
       "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
       "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
@@ -229,7 +251,15 @@
         "strategy": "heuristic-fallback",
         "version": "unavailable"
       },
-      "errors": [],
+      "errors": [
+        {
+          "stage": "generation",
+          "code": "LLM_TRANSPORT_FAILED",
+          "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/logging/AuditLoggerTest.java:24:5:currentlyLogsSensitiveFieldsInPlaintext:AuditLoggerTest:currentlyLogsSensitiveFieldsInPlaintext()",
+          "recoverable": true,
+          "message": "pipeline error recorded"
+        }
+      ],
       "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
       "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
       "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
@@ -265,7 +295,15 @@
         "strategy": "heuristic-fallback",
         "version": "unavailable"
       },
-      "errors": [],
+      "errors": [
+        {
+          "stage": "generation",
+          "code": "LLM_RESPONSE_INVALID",
+          "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/payment/PaymentProcessorTest.java:24:5:shouldFailOnNegativeAmountAfterRetries:PaymentProcessorTest:shouldFailOnNegativeAmountAfterRetries()",
+          "recoverable": false,
+          "message": "pipeline error recorded"
+        }
+      ],
       "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
       "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
       "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"

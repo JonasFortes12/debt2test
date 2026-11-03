@@ -111,12 +111,18 @@ public final class PipelineApplicationService {
     }
 
     /**
-     * Allocates an execution ID and records the run's start, without running any stage.
+     * Allocates an execution ID and records the run as QUEUED, without running any
+     * stage.
      *
-     * <p>Unlike {@link #run(PipelineRequest)}, a persistence failure here is not swallowed into a
-     * recoverable error on some eventual {@link PipelineResult}: there is no result yet to attach
-     * it to, and a caller that cannot allocate a run (e.g. {@code debt-api}) needs to know
-     * synchronously that allocation failed, so it can refuse the request instead of accepting one
+     * <p>
+     * Unlike {@link #run(PipelineRequest)}, a persistence failure here is not
+     * swallowed into a
+     * recoverable error on some eventual {@link PipelineResult}: there is no result
+     * yet to attach
+     * it to, and a caller that cannot allocate a run (e.g. {@code debt-api}) needs
+     * to know
+     * synchronously that allocation failed, so it can refuse the request instead of
+     * accepting one
      * it can never report status for.
      *
      * @throws PipelineException if the run store could not record the run's start
@@ -126,19 +132,24 @@ public final class PipelineApplicationService {
 
         String executionId = UUID.randomUUID().toString();
         PipelineError allocationError = record(
-                new ExecutionState(), "run start", store -> store.runStarted(executionId, request));
+                new ExecutionState(), "run start", store -> store.runQueued(executionId, request));
         if (allocationError != null) {
             throw new PipelineException(allocationError);
         }
         return executionId;
     }
 
-    /** Runs every stage for a run already allocated by {@link #allocate(PipelineRequest)}. */
+    /**
+     * Runs every stage for a run already allocated by
+     * {@link #allocate(PipelineRequest)}.
+     */
     public PipelineResult execute(String executionId, PipelineRequest request) {
         Objects.requireNonNull(executionId, "executionId must not be null");
         Objects.requireNonNull(request, "request must not be null");
 
-        return runStages(executionId, request, new ExecutionState());
+        ExecutionState state = new ExecutionState();
+        record(state, "run dequeue", store -> store.runDequeued(executionId));
+        return runStages(executionId, request, state);
     }
 
     private PipelineResult runStages(String executionId, PipelineRequest request, ExecutionState state) {
@@ -187,8 +198,8 @@ public final class PipelineApplicationService {
         }
 
         PipelineResult finished = assembled;
-        PipelineError persistenceError =
-                record(state, "run completion", store -> store.runFinished(executionId, finished));
+        PipelineError persistenceError = record(state, "run completion",
+                store -> store.runFinished(executionId, finished));
         if (persistenceError != null) {
             assembled = assembled.withAdditionalError(persistenceError);
             assembled = assembled.withStatus(statusFor(assembled.errors()));
@@ -308,7 +319,8 @@ public final class PipelineApplicationService {
         state.addStageErrors("context", enrichment.errors());
         state.enrichmentsById = indexEnrichments(enrichment.enrichments(), state);
         addMissingContextErrors(state);
-        OrchestrationUtils.logPipeline("context enrichment complete for " + state.enrichmentsById.size() + " candidate(s)");
+        OrchestrationUtils
+                .logPipeline("context enrichment complete for " + state.enrichmentsById.size() + " candidate(s)");
         List<EnrichedSatdDebt> enrichments = List.copyOf(state.enrichmentsById.values());
         record(state, "context", store -> store.contextEnriched(executionId, enrichments));
 
@@ -318,7 +330,8 @@ public final class PipelineApplicationService {
 
         state.generationExpectedIds = Collections.unmodifiableSet(
                 new LinkedHashSet<>(state.enrichmentsById.keySet()));
-        OrchestrationUtils.logPipeline("generating tests for " + state.generationExpectedIds.size() + " candidate(s)...");
+        OrchestrationUtils
+                .logPipeline("generating tests for " + state.generationExpectedIds.size() + " candidate(s)...");
         TestGenerationResult generation;
         try {
             generation = testGenerator.generate(
@@ -538,8 +551,10 @@ public final class PipelineApplicationService {
     }
 
     /**
-     * Invokes a run-store callback. A store failure costs the run its stored history, never its
-     * analysis: the failure becomes a recoverable error, so the run ends COMPLETED_WITH_ERRORS.
+     * Invokes a run-store callback. A store failure costs the run its stored
+     * history, never its
+     * analysis: the failure becomes a recoverable error, so the run ends
+     * COMPLETED_WITH_ERRORS.
      */
     private PipelineError record(
             ExecutionState state, String operation, Consumer<PipelineRunStore> callback) {
