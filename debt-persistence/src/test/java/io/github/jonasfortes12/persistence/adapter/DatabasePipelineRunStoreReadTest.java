@@ -16,6 +16,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
+import io.github.jonasfortes12.core.model.PipelineError;
 import io.github.jonasfortes12.core.model.RunReport;
 import io.github.jonasfortes12.core.model.RunSnapshot;
 import io.github.jonasfortes12.core.model.RunStatus;
@@ -35,8 +36,7 @@ class DatabasePipelineRunStoreReadTest {
     private final DebtContextRepository contexts = mock(DebtContextRepository.class);
     private final GeneratedTestRepository tests = mock(GeneratedTestRepository.class);
     private final PipelineErrorRepository errors = mock(PipelineErrorRepository.class);
-    private final DatabasePipelineRunStore store =
-            new DatabasePipelineRunStore(runs, debts, contexts, tests, errors);
+    private final DatabasePipelineRunStore store = new DatabasePipelineRunStore(runs, debts, contexts, tests, errors);
 
     private static PipelineRunEntity run(UUID id, RunStatus status) {
         PipelineRunEntity run = new PipelineRunEntity();
@@ -49,6 +49,15 @@ class DatabasePipelineRunStoreReadTest {
         run.setGeneratedTestCount(1);
         run.setReportPaths("output/debt-report.json");
         return run;
+    }
+
+    private static PipelineErrorEntity error(TechnicalDebtEntity debt, String stage, String code, String message) {
+        PipelineErrorEntity error = new PipelineErrorEntity();
+        error.setTechnicalDebt(debt);
+        error.setStage(stage);
+        error.setCode(code);
+        error.setMessage(message);
+        return error;
     }
 
     @Test
@@ -97,24 +106,39 @@ class DatabasePipelineRunStoreReadTest {
         Page<TechnicalDebtEntity> page = new PageImpl<>(List.of(debt));
         when(debts.findByRun_Id(id, Pageable.unpaged())).thenReturn(page);
 
-        PipelineErrorEntity itemError = new PipelineErrorEntity();
-        itemError.setTechnicalDebt(debt);
-        itemError.setMessage("generation failed");
-        PipelineErrorEntity runLevelError = new PipelineErrorEntity();
-        runLevelError.setMessage("workspace release failed");
+        PipelineErrorEntity itemError = error(debt, "generation", "LLM_GENERATION_FAILED", "generation failed");
+        PipelineErrorEntity runLevelError = error(null, "workspace", "WORKSPACE_RELEASE_FAILED",
+                "workspace release failed");
         when(errors.findByRun_Id(id)).thenReturn(List.of(itemError, runLevelError));
 
         RunReport report = store.findReport(id.toString()).orElseThrow();
 
         assertEquals(1, report.items().size());
         assertEquals(List.of("generation failed"), report.items().get(0).errorMessages());
+        assertEquals(List.of("workspace release failed"),
+                report.errors().stream().map(PipelineError::message).toList());
+    }
+
+    @Test
+    void findReportIncludesRunLevelErrorsForAFailedRunWithNoItems() {
+        UUID id = UUID.randomUUID();
+        when(runs.findById(id)).thenReturn(Optional.of(run(id, RunStatus.FAILED)));
+        when(debts.findByRun_Id(id, Pageable.unpaged())).thenReturn(new PageImpl<>(List.of()));
+        when(errors.findByRun_Id(id)).thenReturn(
+                List.of(error(null, "workspace", "WORKSPACE_PREPARATION_FAILED", "x")));
+
+        RunReport report = store.findReport(id.toString()).orElseThrow();
+
+        assertTrue(report.items().isEmpty());
+        assertEquals(List.of(new PipelineError("workspace", "WORKSPACE_PREPARATION_FAILED", "x", null, false)),
+                report.errors());
     }
 
     @Test
     void runCancelledMarksANonTerminalRunCancelled() {
         UUID id = UUID.randomUUID();
         PipelineRunEntity runEntity = run(id, RunStatus.RUNNING);
-        when(runs.findById(id)).thenReturn(Optional.of(runEntity));
+        when(runs.findByIdForUpdate(id)).thenReturn(Optional.of(runEntity));
 
         store.runCancelled(id.toString());
 
@@ -135,7 +159,8 @@ class DatabasePipelineRunStoreReadTest {
     @Test
     void runCancelledNoOpsForAMalformedExecutionIdWithoutQueryingTheRepository() {
         store.runCancelled("not-a-uuid");
-        // no exception: parsing fails before any repository call, so nothing to assert on runs/debts/errors mocks
+        // no exception: parsing fails before any repository call, so nothing to assert
+        // on runs/debts/errors mocks
     }
 
     @Test
@@ -144,7 +169,7 @@ class DatabasePipelineRunStoreReadTest {
         PipelineRunEntity runEntity = run(id, RunStatus.COMPLETED);
         Instant finishedAt = Instant.parse("2026-09-15T10:05:00Z");
         runEntity.setFinishedAt(finishedAt);
-        when(runs.findById(id)).thenReturn(Optional.of(runEntity));
+        when(runs.findByIdForUpdate(id)).thenReturn(Optional.of(runEntity));
 
         store.runCancelled(id.toString());
 

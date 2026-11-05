@@ -156,6 +156,7 @@ Rules:
 5. JSON serialization, CLI arguments, Spring annotations, HTTP clients, Weka, JavaParser, JGit, and dotenv configuration belong outside `debt-core`.
 6. A generated JSON file is an external artifact, not an internal module-to-module API.
 7. No module may reach into another module's `src`, `target`, output directory, or private implementation package.
+8. `debt-api` is a delivery module that depends only on `debt-core` and `debt-orchestrator`. It obtains the pipeline application service from the orchestrator (`AppOrchestrator.createApplication(...)`) and must not depend on `debt-extractor`, `debt-classifier`, `debt-context`, `debt-tester`, or `debt-persistence`. Spring Boot, HTTP DTOs, and the asynchronous launcher (`PipelineRunLauncher`) stay inside `debt-api`; no feature module and no `debt-core` type may depend on it (§13.2).
 
 ## 6. Module Responsibilities
 
@@ -289,6 +290,25 @@ Responsibilities:
 The module depends only on `debt-core`. It never calls the extractor, classifier, context, or
 tester modules, and no persistence type appears in `debt-core`. Persistence is disabled by
 default so the CLI and the default build require neither a database nor Docker.
+
+### 6.8 `debt-api`
+
+The API module is a Spring Boot delivery adapter that exposes the pipeline over HTTP.
+
+Responsibilities:
+
+- Map HTTP requests (`CreateRunRequest`) into a `PipelineRequest` and core read models into response DTOs (`RunAcceptedResponse`, `RunStatusResponse`, `RunReportResponse`).
+- Obtain the pipeline application service from `debt-orchestrator` (`AppOrchestrator.createApplication(...)`) instead of constructing stage adapters itself.
+- Submit runs asynchronously through `PipelineRunLauncher`: `allocate()` mints the execution ID, then `execute()` runs on a single background thread while the endpoint answers `202 Accepted`.
+- Read run status and reports back through `PipelineRunStore` (`findRun`, `findReport`) rather than holding results in memory.
+- Handle best-effort cancellation and record it via `PipelineRunStore.runCancelled`.
+- Translate missing, unfinished, or already-finished runs into typed HTTP errors (`ApiExceptionHandler`, `ApiError`).
+- Own web configuration (CORS, `.env` loading into the Spring environment) and never return secrets in responses.
+
+The module depends only on `debt-core` and `debt-orchestrator`. It contains no domain logic and no
+stage sequencing, and it never calls the extractor, classifier, context, tester, or persistence
+modules directly. It requires `DEBT_PERSISTENCE_ENABLED=true` to start, since its read endpoints
+have no in-memory fallback. See §13.2 for the endpoint contract.
 
 ## 7. Core Domain Model
 
@@ -630,15 +650,27 @@ domain `runId` carried inside `PipelineRequest`/`PipelineResult`. This mirrors t
 `PipelineRunStore` port, which is already keyed by `executionId` throughout (see §8).
 
 Execution is always asynchronous: `POST /api/pipeline/runs` calls
-`PipelineApplicationService.allocate(request)` to record the run and mint the execution ID, then
-hands the request to `PipelineRunLauncher`, which submits it to a single background thread and
-returns immediately. The endpoint responds `202 Accepted` with the execution ID before the
+`PipelineApplicationService.allocate(request)` to record the run as `QUEUED`
+(`PipelineRunStore.runQueued`) and mint the execution ID, then hands the request to
+`PipelineRunLauncher`, which submits it to a single background thread and returns immediately.
+When the worker picks the run up, `execute` moves it to `RUNNING` (`runDequeued`). The CLI path
+(`run`) still records `RUNNING` directly via `runStarted`. The endpoint responds `202 Accepted` with the execution ID before the
 pipeline runs; there is no synchronous execution path. `GET /api/pipeline/runs/{executionId}` and
 `GET /api/pipeline/runs/{executionId}/report` read state back through the read methods added to
 `PipelineRunStore` — `findRun` (run status and counts) and `findReport` (full report once
 finished) — rather than reconstructing a `PipelineResult` in memory. `POST
 /api/pipeline/runs/{executionId}/cancel` performs a best-effort `Future.cancel(true)` plus an
-unconditional `PipelineRunStore.runCancelled` write; it does not guarantee in-flight work stops.
+unconditional `PipelineRunStore.runCancelled` write and returns `{executionId, outcome}`
+(`ACCEPTED` or `UNKNOWN`); it does not guarantee in-flight work stops. A terminal run's record is
+frozen: the store ignores every later stage or `runFinished` write, so `CANCELLED` stays
+`CANCELLED` and a fetched report never changes.
+
+The HTTP contract is typed and uniform: `RunReportItem` in `debt-core` carries `ContextStatus`
+and `ItemStatus` (not strings) plus structured `PipelineError`s, and `RunReport` carries the
+run-level errors that explain a `FAILED` run. These were deliberate shared-domain changes (see
+`docs/superpowers/specs/2026-11-02-api-swagger-contract-design.md`, D-2–D-4, D-12, D-13). Every
+non-2xx response is an `ApiError { message, fieldErrors[] }`. The Swagger docs are part of the
+contract and are kept complete by `OpenApiDocumentationCompletenessTest` (see `CLAUDE.md`).
 
 `debt-api` requires `DEBT_PERSISTENCE_ENABLED=true` to start, since `GET` endpoints have no
 in-memory fallback to read from.

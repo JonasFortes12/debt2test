@@ -22,7 +22,10 @@ import io.github.jonasfortes12.persistence.entity.PipelineErrorEntity;
 import io.github.jonasfortes12.persistence.entity.PipelineRunEntity;
 import io.github.jonasfortes12.persistence.entity.TechnicalDebtEntity;
 
-/** Maps immutable domain records onto JPA entities. Pure functions: no Spring, no I/O. */
+/**
+ * Maps immutable domain records onto JPA entities. Pure functions: no Spring,
+ * no I/O.
+ */
 public final class EntityMapper {
 
     private EntityMapper() {
@@ -139,18 +142,31 @@ public final class EntityMapper {
                 debt.getSatd(),
                 debt.getDebtType(),
                 debt.getConfidence(),
-                context == null ? null : context.getContextStatus().name(),
+                context == null ? null : context.getContextStatus(),
                 context == null ? null : context.getTaskKey(),
                 context == null ? null : context.getSummary(),
                 context == null ? null : context.getUrl(),
                 test == null ? null : test.getSourceCode(),
                 test == null ? null : test.getProvider(),
                 test == null ? null : test.getModel(),
-                test == null ? null : test.getStatus().name(),
-                errors.stream().map(PipelineErrorEntity::getMessage).toList());
+                test == null ? null : test.getStatus(),
+                errors.stream().map(PipelineErrorEntity::getMessage).toList(),
+                errors.stream().map(EntityMapper::toPipelineError).toList());
     }
 
-    /** {@code PipelineRunEntity.reportPaths} is newline-delimited; see {@code DatabaseReportSink}. */
+    public static PipelineError toPipelineError(PipelineErrorEntity error) {
+        return new PipelineError(
+                error.getStage(),
+                error.getCode(),
+                error.getMessage(),
+                error.getCandidateId(),
+                error.isRecoverable());
+    }
+
+    /**
+     * {@code PipelineRunEntity.reportPaths} is newline-delimited; see
+     * {@code DatabaseReportSink}.
+     */
     private static List<String> reportPathList(String reportPaths) {
         return reportPaths == null || reportPaths.isBlank() ? List.of() : List.of(reportPaths.split("\n"));
     }

@@ -42,11 +42,17 @@ import io.github.jonasfortes12.persistence.repository.TechnicalDebtRepository;
 /**
  * Stores pipeline runs in the database, one transaction per lifecycle event.
  *
- * <p>The pipeline as a whole is not transactional: a run may take minutes, and holding a
- * connection open across LLM calls would leak a resource for no benefit. The cost is that a
- * crashed run leaves its row in RUNNING, which a future reconciliation sweep can pick up.
+ * <p>
+ * The pipeline as a whole is not transactional: a run may take minutes, and
+ * holding a
+ * connection open across LLM calls would leak a resource for no benefit. The
+ * cost is that a
+ * crashed run leaves its row in RUNNING, which a future reconciliation sweep
+ * can pick up.
  *
- * <p>Every hook is idempotent, keyed by the (pipeline_run_id, candidate_id) unique constraint, so
+ * <p>
+ * Every hook is idempotent, keyed by the (pipeline_run_id, candidate_id) unique
+ * constraint, so
  * replaying a stage never duplicates rows.
  */
 @Component
@@ -74,11 +80,33 @@ public class DatabasePipelineRunStore implements PipelineRunStore {
     @Override
     @Transactional
     public void runStarted(String executionId, PipelineRequest request) {
+        insertRun(executionId, request, RunStatus.RUNNING);
+    }
+
+    @Override
+    @Transactional
+    public void runQueued(String executionId, PipelineRequest request) {
+        insertRun(executionId, request, RunStatus.QUEUED);
+    }
+
+    @Override
+    @Transactional
+    public void runDequeued(String executionId) {
+        parseExecutionId(executionId)
+                .flatMap(runs::findByIdForUpdate)
+                .filter(run -> run.getStatus() == RunStatus.QUEUED)
+                .ifPresent(run -> {
+                    run.setStatus(RunStatus.RUNNING);
+                    run.setStartedAt(Instant.now());
+                });
+    }
+
+    private void insertRun(String executionId, PipelineRequest request, RunStatus status) {
         PipelineRunEntity run = new PipelineRunEntity();
         run.setId(UUID.fromString(executionId));
         run.setRepositoryUrl(UrlSanitizer.sanitize(request.repository().repositoryUrl()));
         run.setRequestedRevision(request.repository().revision());
-        run.setStatus(RunStatus.RUNNING);
+        run.setStatus(status);
         run.setStartedAt(Instant.now());
         run.setTriggeredBy("cli");
         run.setContextEnabled(request.context().enabled());
@@ -90,99 +118,103 @@ public class DatabasePipelineRunStore implements PipelineRunStore {
     @Override
     @Transactional
     public void runIdResolved(String executionId, String runId) {
-        runs.findById(UUID.fromString(executionId)).ifPresent(run -> run.setRunId(runId));
+        activeRun(executionId).ifPresent(run -> run.setRunId(runId));
     }
 
     @Override
     @Transactional
     public void workspaceReady(String executionId, RepositoryWorkspace workspace) {
-        runs.findById(UUID.fromString(executionId))
-                .ifPresent(run -> run.setResolvedRevision(workspace.revision()));
+        activeRun(executionId).ifPresent(run -> run.setResolvedRevision(workspace.revision()));
     }
 
     @Override
     @Transactional
     public void candidatesExtracted(String executionId, List<SatdCandidate> candidates) {
-        PipelineRunEntity run = requireRun(executionId);
-        Map<String, Long> existing = idIndex(run.getId());
-        List<TechnicalDebtEntity> inserts = new ArrayList<>();
-        for (SatdCandidate candidate : candidates) {
-            if (!existing.containsKey(candidate.candidateId())) {
-                inserts.add(EntityMapper.toEntity(candidate, run));
+        activeRun(executionId).ifPresent(run -> {
+            Map<String, Long> existing = idIndex(run.getId());
+            List<TechnicalDebtEntity> inserts = new ArrayList<>();
+            for (SatdCandidate candidate : candidates) {
+                if (!existing.containsKey(candidate.candidateId())) {
+                    inserts.add(EntityMapper.toEntity(candidate, run));
+                }
             }
-        }
-        debts.saveAll(inserts);
+            debts.saveAll(inserts);
+        });
     }
 
     @Override
     @Transactional
     public void candidatesClassified(String executionId, List<ClassifiedDebt> classifications) {
-        PipelineRunEntity run = requireRun(executionId);
-        Map<String, TechnicalDebtEntity> byCandidate = debtsByCandidateId(run.getId());
-        for (ClassifiedDebt classified : classifications) {
-            TechnicalDebtEntity debt = byCandidate.get(classified.candidateId());
-            if (debt == null) {
-                debt = debts.save(EntityMapper.toEntity(classified.candidate(), run));
+        activeRun(executionId).ifPresent(run -> {
+            Map<String, TechnicalDebtEntity> byCandidate = debtsByCandidateId(run.getId());
+            for (ClassifiedDebt classified : classifications) {
+                TechnicalDebtEntity debt = byCandidate.get(classified.candidateId());
+                if (debt == null) {
+                    debt = debts.save(EntityMapper.toEntity(classified.candidate(), run));
+                }
+                EntityMapper.applyClassification(debt, classified);
             }
-            EntityMapper.applyClassification(debt, classified);
-        }
+        });
     }
 
     @Override
     @Transactional
     public void contextEnriched(String executionId, List<EnrichedSatdDebt> enrichments) {
-        PipelineRunEntity run = requireRun(executionId);
-        Map<String, TechnicalDebtEntity> byCandidate = debtsByCandidateId(run.getId());
-        for (EnrichedSatdDebt enriched : enrichments) {
-            TechnicalDebtEntity debt = byCandidate.get(enriched.candidateId());
-            if (debt == null) {
-                continue;
+        activeRun(executionId).ifPresent(run -> {
+            Map<String, TechnicalDebtEntity> byCandidate = debtsByCandidateId(run.getId());
+            for (EnrichedSatdDebt enriched : enrichments) {
+                TechnicalDebtEntity debt = byCandidate.get(enriched.candidateId());
+                if (debt == null) {
+                    continue;
+                }
+                contexts.findByTechnicalDebt_Id(debt.getId()).ifPresent(contexts::delete);
+                contexts.save(EntityMapper.toContextEntity(enriched, debt));
             }
-            contexts.findByTechnicalDebt_Id(debt.getId()).ifPresent(contexts::delete);
-            contexts.save(EntityMapper.toContextEntity(enriched, debt));
-        }
+        });
     }
 
     @Override
     @Transactional
     public void testsGenerated(String executionId, List<GeneratedTest> generatedTests) {
-        PipelineRunEntity run = requireRun(executionId);
-        Map<String, TechnicalDebtEntity> byCandidate = debtsByCandidateId(run.getId());
-        for (GeneratedTest test : generatedTests) {
-            TechnicalDebtEntity debt = byCandidate.get(test.candidateId());
-            if (debt == null) {
-                continue;
+        activeRun(executionId).ifPresent(run -> {
+            Map<String, TechnicalDebtEntity> byCandidate = debtsByCandidateId(run.getId());
+            for (GeneratedTest test : generatedTests) {
+                TechnicalDebtEntity debt = byCandidate.get(test.candidateId());
+                if (debt == null) {
+                    continue;
+                }
+                tests.findByTechnicalDebt_Id(debt.getId()).ifPresent(tests::delete);
+                tests.save(EntityMapper.toTestEntity(test, debt));
             }
-            tests.findByTechnicalDebt_Id(debt.getId()).ifPresent(tests::delete);
-            tests.save(EntityMapper.toTestEntity(test, debt));
-        }
+        });
     }
 
     @Override
     @Transactional
     public void runFinished(String executionId, PipelineResult result) {
-        PipelineRunEntity run = requireRun(executionId);
-        run.setStatus(result.status());
-        run.setFinishedAt(Instant.now());
-        run.setCandidateCount(result.items().size());
-        run.setSatdCount((int) result.items().stream()
-                .filter(item -> item.classification() != null && item.classification().satd())
-                .count());
-        run.setGeneratedTestCount((int) result.items().stream()
-                .filter(item -> item.generatedTest() != null
-                        && item.generatedTest().status() == ItemStatus.GENERATED)
-                .count());
+        activeRun(executionId).ifPresent(run -> {
+            run.setStatus(result.status());
+            run.setFinishedAt(Instant.now());
+            run.setCandidateCount(result.items().size());
+            run.setSatdCount((int) result.items().stream()
+                    .filter(item -> item.classification() != null && item.classification().satd())
+                    .count());
+            run.setGeneratedTestCount((int) result.items().stream()
+                    .filter(item -> item.generatedTest() != null
+                            && item.generatedTest().status() == ItemStatus.GENERATED)
+                    .count());
 
-        errors.deleteByRun_Id(run.getId());
-        Map<String, TechnicalDebtEntity> byCandidate = debtsByCandidateId(run.getId());
-        List<PipelineErrorEntity> rows = new ArrayList<>();
-        for (PipelineError error : result.errors()) {
-            TechnicalDebtEntity debt = error.candidateId() == null
-                    ? null
-                    : byCandidate.get(error.candidateId());
-            rows.add(EntityMapper.toErrorEntity(error, run, debt));
-        }
-        errors.saveAll(rows);
+            errors.deleteByRun_Id(run.getId());
+            Map<String, TechnicalDebtEntity> byCandidate = debtsByCandidateId(run.getId());
+            List<PipelineErrorEntity> rows = new ArrayList<>();
+            for (PipelineError error : result.errors()) {
+                TechnicalDebtEntity debt = error.candidateId() == null
+                        ? null
+                        : byCandidate.get(error.candidateId());
+                rows.add(EntityMapper.toErrorEntity(error, run, debt));
+            }
+            errors.saveAll(rows);
+        });
     }
 
     @Override
@@ -203,14 +235,19 @@ public class DatabasePipelineRunStore implements PipelineRunStore {
         UUID id = parsed.get();
         return runs.findById(id).map(run -> {
             List<TechnicalDebtEntity> items = debts.findByRun_Id(id, Pageable.unpaged()).getContent();
-            Map<Long, List<PipelineErrorEntity>> errorsByDebtId = errors.findByRun_Id(id).stream()
+            List<PipelineErrorEntity> runErrors = errors.findByRun_Id(id);
+            Map<Long, List<PipelineErrorEntity>> errorsByDebtId = runErrors.stream()
                     .filter(error -> error.getTechnicalDebt() != null)
                     .collect(Collectors.groupingBy(error -> error.getTechnicalDebt().getId()));
             List<RunReportItem> reportItems = items.stream()
                     .map(debt -> EntityMapper.toReportItem(
                             debt, errorsByDebtId.getOrDefault(debt.getId(), List.of())))
                     .toList();
-            return new RunReport(EntityMapper.toSnapshot(run), reportItems);
+            List<PipelineError> runLevelErrors = runErrors.stream()
+                    .filter(error -> error.getTechnicalDebt() == null)
+                    .map(EntityMapper::toPipelineError)
+                    .toList();
+            return new RunReport(EntityMapper.toSnapshot(run), reportItems, runLevelErrors);
         });
     }
 
@@ -221,7 +258,7 @@ public class DatabasePipelineRunStore implements PipelineRunStore {
         if (parsed.isEmpty()) {
             return;
         }
-        runs.findById(parsed.get()).ifPresent(run -> {
+        runs.findByIdForUpdate(parsed.get()).ifPresent(run -> {
             if (!run.getStatus().isTerminal()) {
                 run.setStatus(RunStatus.CANCELLED);
                 run.setFinishedAt(Instant.now());
@@ -229,9 +266,18 @@ public class DatabasePipelineRunStore implements PipelineRunStore {
         });
     }
 
-    private PipelineRunEntity requireRun(String executionId) {
-        return runs.findById(UUID.fromString(executionId))
-                .orElseThrow(() -> new IllegalStateException("no run for execution " + executionId));
+    /**
+     * The run's row, locked for this transaction, while it can still change. Empty
+     * once the run is
+     * terminal, so the stages of a run cancelled mid-flight cannot overwrite its
+     * CANCELLED status
+     * or its report afterwards; the lock makes the check and the write atomic
+     * against a cancel.
+     */
+    private Optional<PipelineRunEntity> activeRun(String executionId) {
+        return parseExecutionId(executionId)
+                .flatMap(runs::findByIdForUpdate)
+                .filter(run -> !run.getStatus().isTerminal());
     }
 
     private static Optional<UUID> parseExecutionId(String executionId) {
