@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import io.github.jonasfortes12.core.error.PipelineException;
 import io.github.jonasfortes12.core.model.ClassificationOptions;
 import io.github.jonasfortes12.core.model.ClassifiedDebt;
+import io.github.jonasfortes12.core.context.ContextSource;
 import io.github.jonasfortes12.core.model.ContextRequest;
 import io.github.jonasfortes12.core.model.ContextStatus;
 import io.github.jonasfortes12.core.model.EnrichedSatdDebt;
@@ -42,6 +44,7 @@ import io.github.jonasfortes12.core.model.SourceProvenance;
 import io.github.jonasfortes12.core.model.TestGenerationOptions;
 import io.github.jonasfortes12.core.model.ValidationStatus;
 import io.github.jonasfortes12.core.port.ContextEnricher;
+import io.github.jonasfortes12.core.port.PipelineRunStore;
 import io.github.jonasfortes12.core.port.DebtClassifier;
 import io.github.jonasfortes12.core.port.ReportSink;
 import io.github.jonasfortes12.core.port.RepositoryWorkspaceProvider;
@@ -288,6 +291,37 @@ class PipelineApplicationServiceTest {
         assertNull(items.get(stages.candidateA.candidateId()).generatedTest());
         assertNull(items.get(stages.candidateB.candidateId()).enrichment());
         assertStageFailureIsSanitized(result, "context", "CONTEXT_STAGE_FAILED", "context secret");
+    }
+
+    @Test
+    void runPassesTheContextSourceToTheEnricherFactory() {
+        List<String> calls = new ArrayList<>();
+        FakeStages stages = FakeStages.successful(calls);
+        List<Optional<ContextSource>> requestedSources = new ArrayList<>();
+        ContextSource source = new ContextSource("jira", "https://acme.atlassian.net", Optional.empty());
+
+        PipelineResult result = stages.service(requested -> {
+            requestedSources.add(requested);
+            return stages.new ContextFake();
+        }).run(request("run-1"), Optional.of(source));
+
+        assertEquals(RunStatus.COMPLETED, result.status());
+        assertEquals(List.of(Optional.of(source)), requestedSources);
+    }
+
+    @Test
+    void factoryFailureBecomesContextStageError() {
+        List<String> calls = new ArrayList<>();
+        FakeStages stages = FakeStages.successful(calls);
+
+        PipelineResult result = stages.service(requested -> {
+            throw new IllegalStateException("factory secret");
+        }).run(request("run-1"), Optional.empty());
+
+        assertEquals(RunStatus.FAILED, result.status());
+        Map<String, PipelineItemResult> items = itemsById(result);
+        assertEquals(ContextStatus.FAILED, items.get(stages.candidateA.candidateId()).enrichment().contextStatus());
+        assertStageFailureIsSanitized(result, "context", "CONTEXT_STAGE_FAILED", "factory secret");
     }
 
     @Test
@@ -623,6 +657,18 @@ class PipelineApplicationServiceTest {
 
         private static FakeStages successful(List<String> calls) {
             return new FakeStages(calls);
+        }
+
+        private PipelineApplicationService service(ContextEnricherFactory contextEnrichers) {
+            return new PipelineApplicationService(
+                    new WorkspaceFake(),
+                    new ExtractorFake(),
+                    new ClassifierFake(),
+                    contextEnrichers,
+                    new GeneratorFake(),
+                    new ReportFake(),
+                    (request, workspace) -> request.runId(),
+                    PipelineRunStore.NO_OP);
         }
 
         private PipelineApplicationService service() {

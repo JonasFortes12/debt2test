@@ -14,6 +14,7 @@ import org.springframework.core.env.Environment;
 import io.github.jonasfortes12.core.port.PipelineRunStore;
 import io.github.jonasfortes12.orchestrator.AppOrchestrator;
 import io.github.jonasfortes12.orchestrator.application.PipelineApplicationService;
+import io.github.jonasfortes12.orchestrator.context.ContextSources;
 import io.github.jonasfortes12.orchestrator.persistence.PersistenceContext;
 
 /**
@@ -60,6 +61,12 @@ public class DebtApiApplication {
     public PipelineApplicationService pipelineApplicationService(
             AppOrchestrator.CliOptions cliOptions, PersistenceContext persistenceContext) {
         return AppOrchestrator.createApplication(cliOptions, Optional.of(persistenceContext));
+    }
+
+    /** The registered context providers; the controller checks a request's context source against them. */
+    @Bean
+    public ContextSources contextSources() {
+        return AppOrchestrator.contextSources();
     }
 
     @Bean

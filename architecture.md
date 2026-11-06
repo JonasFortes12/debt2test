@@ -242,6 +242,8 @@ Recommended internal components:
 - `JiraContextProvider`: Jira adapter.
 - `MockContextProvider`: deterministic tests and offline development.
 
+Each provider also implements the `debt-core` port `ContextSourceConnector` (`JiraSourceConnector` for Jira): it checks a `ContextSource` before a run (`verifyAccess`, returning a typed `ContextAccessCheck` outcome and a host-only message) and builds the run's `ContextEnricher` (`enricherFor`). `JiraClient` works anonymously (no `Authorization` header) for public sites, or with Basic `email:apiToken` for private ones.
+
 ### 6.5 `debt-tester`
 
 The tester turns enriched debt into candidate test code.
@@ -481,7 +483,17 @@ The orchestrator owns the sequence and correlation. No stage should invoke the n
 
 ## 10. Context Provider Resolution
 
-`ContextHandler` (in `debt-context`) holds at most one configured `ContextProvider`, injected as `Optional<ContextProvider>`. There is currently no live provider registered by default (`AppOrchestrator` wires `Optional.empty()`), so enrichment resolves every reference to `CONTEXT_NOT_FOUND` until a real provider adapter (e.g. Jira) is registered.
+`ContextHandler` (in `debt-context`) holds at most one configured `ContextProvider`, injected as `Optional<ContextProvider>`. It is built **per run**, not at startup, because the context source (which tracker, which credentials) belongs to the run:
+
+- The source is a `debt-core` `ContextSource` (provider id, base URL, optional `ContextCredentials`). It travels next to the `PipelineRequest`, never inside it, and its `toString()` redacts credentials. `ContextRequest.enabled` is `true` exactly when a source is present; with no source every item is `SKIPPED`.
+- `ContextSources` (in `debt-orchestrator`) is the registry of `ContextSourceConnector`s, keyed by provider id; `AppOrchestrator.contextSources()` registers Jira. `PipelineApplicationService` asks a `ContextEnricherFactory` (`ContextSources::enricherFor`) for the run's enricher inside the context stage, so a failure there is a `CONTEXT_STAGE_FAILED`, not an escaped exception.
+- The REST API takes the source from the request's `context` object; the CLI builds it from `DEBT_CONTEXT_JIRA_*` (base URL alone = public Jira; email and token together = private).
+- Both entry points run `ContextSources.verify(source)` **before** the run is recorded (API: `400`, or `502` when the tracker is unreachable; CLI: exit code `3` before cloning).
+
+Access-check limitations:
+
+- Jira access is per project. The check (`GET /rest/api/2/mypermissions?permissions=BROWSE_PROJECTS`) only answers "can these credentials, or an anonymous user, browse at least one project". An item can still end `FAILED` with `UNAUTHORIZED` if it references a restricted project; that is normal item-level behavior.
+- How a private Jira Cloud site answers an anonymous probe (`401`, a redirect to the login page, or `200` without the permission) has not been verified against live sites. All three map to "authentication required", so any of them gives the intended `400`. If a site behaves differently, the run is accepted and items fail with `UNAUTHORIZED`, as they did before this check existed.
 
 ```mermaid
 sequenceDiagram
@@ -675,6 +687,15 @@ contract and are kept complete by `OpenApiDocumentationCompletenessTest` (see `C
 `debt-api` requires `DEBT_PERSISTENCE_ENABLED=true` to start, since `GET` endpoints have no
 in-memory fallback to read from.
 
+Since API `2.0.0`, `POST /api/pipeline/runs` takes an optional `context` object
+(`provider`, `baseUrl`, and for a private Jira `email` + `apiToken` together) instead of the
+removed `contextEnabled` flag. When present, the controller checks the provider is registered and
+calls `ContextSources.verify` synchronously before `allocate`. An unsupported provider, malformed
+URL, unpaired credentials, or a failed access check answers `400`; an unreachable tracker answers
+`502`. In either case no run is recorded. The `ContextSource` is handed to
+`PipelineRunLauncher.submit` and lives only in the queued task. See
+`docs/superpowers/specs/2026-11-06-request-scoped-context-source-design.md`.
+
 Run states are observable without exposing provider credentials. API responses return sanitized
 configuration summaries and report references, not secrets. See
 `docs/superpowers/specs/2026-09-15-rest-api-design.md` for the full design.
@@ -688,6 +709,8 @@ configuration summaries and report references, not secrets. See
 - External descriptions and source code are untrusted prompt input. Prompt construction should clearly separate instructions from retrieved content.
 - Generated source code must be treated as untrusted output until validated and reviewed.
 - Provider-specific configuration belongs in adapter configuration, not in shared domain records.
+- Issue-tracker credentials sent in an API request (`context.email`, `context.apiToken`) are held in memory for that run only: they are never fields of `PipelineRequest`, never persisted, logged, or returned, and `ContextSource`/`ContextSourceRequest` redact them in `toString()`.
+- **Accepted risk (until API authentication exists):** `context.baseUrl` makes the server send a GET to a caller-chosen URL, and the `400`/`502` distinction reveals whether that host is reachable from the server (server-side request forgery). The API authentication project must revisit this with a host allowlist, private/loopback address blocking, and `https`-only URLs.
 
 ## 15. Testing Strategy
 

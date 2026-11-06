@@ -13,12 +13,9 @@ import java.util.Objects;
 import java.util.Optional;
 
 import io.github.jonasfortes12.classifier.WekaDebtHunterClassifier;
-import io.github.jonasfortes12.context.chain.ContextHandler;
-import io.github.jonasfortes12.context.extraction.IssueReferenceExtractor;
-import io.github.jonasfortes12.context.provider.ContextProvider;
-import io.github.jonasfortes12.context.provider.jira.JiraClient;
-import io.github.jonasfortes12.context.provider.jira.JiraConfig;
-import io.github.jonasfortes12.context.provider.jira.JiraContextProvider;
+import io.github.jonasfortes12.context.provider.jira.JiraSourceConnector;
+import io.github.jonasfortes12.core.context.ContextAccessCheck;
+import io.github.jonasfortes12.core.context.ContextSource;
 import io.github.jonasfortes12.core.model.ClassificationOptions;
 import io.github.jonasfortes12.core.model.ContextRequest;
 import io.github.jonasfortes12.core.model.ExtractionOptions;
@@ -40,6 +37,7 @@ import io.github.jonasfortes12.core.util.UrlSanitizer;
 import io.github.jonasfortes12.extractor.AstCommentExtractor;
 import io.github.jonasfortes12.extractor.GitCloneService;
 import io.github.jonasfortes12.orchestrator.application.PipelineApplicationService;
+import io.github.jonasfortes12.orchestrator.context.ContextSources;
 import io.github.jonasfortes12.orchestrator.persistence.PersistenceContext;
 import io.github.jonasfortes12.orchestrator.reporting.CompositeReportSink;
 import io.github.jonasfortes12.orchestrator.reporting.FileReportSink;
@@ -65,7 +63,13 @@ public final class AppOrchestrator {
         try {
             BootstrappedPipeline pipeline = CliBootstrapper.bootstrap(args);
             try {
-                return executePipeline(pipeline.options(), pipeline.application()::run);
+                Optional<ContextSource> contextSource = pipeline.contextSource();
+                Optional<ExitCode> contextFailure = verifyContextSource(contextSource, pipeline.contextSources());
+                if (contextFailure.isPresent()) {
+                    return contextFailure.get();
+                }
+                return executePipeline(pipeline.options(), contextSource,
+                        request -> pipeline.application().run(request, contextSource));
             } finally {
                 pipeline.persistence().ifPresent(PersistenceContext::close);
             }
@@ -82,9 +86,35 @@ public final class AppOrchestrator {
         return exitCode;
     }
 
+    /**
+     * Checks the CLI's context source before anything is cloned, so a private Jira without
+     * credentials fails fast with the same message the API returns, instead of a run whose items
+     * all fail with {@code UNAUTHORIZED}.
+     *
+     * @return the exit code to stop with, or empty when there is no source or the check passed
+     */
+    static Optional<ExitCode> verifyContextSource(Optional<ContextSource> contextSource, ContextSources sources) {
+        if (contextSource.isEmpty()) {
+            return Optional.empty();
+        }
+        ContextAccessCheck check = sources.verify(contextSource.get());
+        if (check.passed()) {
+            return Optional.empty();
+        }
+        System.out.println("status=FAILED");
+        System.out.println(check.message());
+        System.out.println(ExitCode.CONTEXT_UNAVAILABLE.description());
+        return Optional.of(ExitCode.CONTEXT_UNAVAILABLE);
+    }
+
     static ExitCode executePipeline(CliOptions options, PipelineExecutor executor) {
+        return executePipeline(options, Optional.empty(), executor);
+    }
+
+    static ExitCode executePipeline(
+            CliOptions options, Optional<ContextSource> contextSource, PipelineExecutor executor) {
         PipelineResult result = Objects.requireNonNull(
-                executor.execute(createRequest(options)),
+                executor.execute(createRequest(options, contextSource)),
                 "pipeline result must not be null");
         System.out.println("status=" + result.status());
         if (result.reportArtifact() != null) {
@@ -120,6 +150,11 @@ public final class AppOrchestrator {
 
     public static String runIdFor(
             CliOptions options, LlmConfig llmConfig, RepositoryWorkspace workspace) {
+        return runIdFor(options, llmConfig, workspace, false);
+    }
+
+    public static String runIdFor(
+            CliOptions options, LlmConfig llmConfig, RepositoryWorkspace workspace, boolean contextEnabled) {
         Objects.requireNonNull(options, "options must not be null");
         if (options.runIdOverride() != null) {
             return options.runIdOverride();
@@ -138,7 +173,7 @@ public final class AppOrchestrator {
                 llmConfig.getModel(),
                 resolvedEndpoint(llmConfig),
                 "allowHeuristicFallback=true",
-                "contextEnabled=true",
+                "contextEnabled=" + contextEnabled,
                 "framework=" + TestGenerationOptions.DEFAULT_FRAMEWORK,
                 "promptVersion=" + TestGeneratorService.PROMPT_VERSION);
         try {
@@ -151,20 +186,31 @@ public final class AppOrchestrator {
     }
 
     public static PipelineRequest createRequest(CliOptions options) {
+        return createRequest(options, Optional.empty());
+    }
+
+    /** Context is enabled exactly when a context source is configured. */
+    public static PipelineRequest createRequest(CliOptions options, Optional<ContextSource> contextSource) {
         return createRequest(options, options.runIdOverride() == null
                 ? PipelineApplicationService.AUTOMATIC_RUN_ID
-                : options.runIdOverride());
+                : options.runIdOverride(), contextSource);
     }
 
     public static PipelineRequest createRequest(CliOptions options, String runId) {
+        return createRequest(options, runId, Optional.empty());
+    }
+
+    public static PipelineRequest createRequest(
+            CliOptions options, String runId, Optional<ContextSource> contextSource) {
         Objects.requireNonNull(options, "options must not be null");
         Objects.requireNonNull(runId, "runId must not be null");
+        Objects.requireNonNull(contextSource, "contextSource must not be null");
         return new PipelineRequest(
                 runId,
                 new RepositoryRequest(options.repositoryUrl(), options.revision()),
                 new ExtractionOptions(runId),
                 new ClassificationOptions(true),
-                new ContextRequest(true),
+                new ContextRequest(contextSource.isPresent()),
                 new TestGenerationOptions(TestGenerationOptions.DEFAULT_FRAMEWORK),
                 new ReportOptions(options.outputDirectory()));
     }
@@ -203,22 +249,21 @@ public final class AppOrchestrator {
                 new GitCloneService(),
                 new AstCommentExtractor(),
                 new WekaDebtHunterClassifier(options.binaryModelPath(), options.multiModelPath()),
-                new ContextHandler(new IssueReferenceExtractor(), jiraContextProvider()),
+                contextSources()::enricherFor,
                 new TestGeneratorService(llmConfig),
                 reportSink,
                 (request, workspace) -> request.runId().equals(PipelineApplicationService.AUTOMATIC_RUN_ID)
-                        ? runIdFor(options, llmConfig, workspace)
+                        ? runIdFor(options, llmConfig, workspace, request.context().enabled())
                         : request.runId(),
                 runStore);
     }
 
-    private static Optional<ContextProvider> jiraContextProvider() {
-        JiraConfig jiraConfig = new JiraConfig();
-        if (!jiraConfig.isConfigured()) {
-            return Optional.empty();
-        }
-        JiraClient client = new JiraClient(jiraConfig.getBaseUrl(), jiraConfig.getEmail(), jiraConfig.getApiToken());
-        return Optional.of(new JiraContextProvider(client));
+    /**
+     * The registered context providers. Adding a provider means adding its connector here; the
+     * pipeline, the CLI and the API pick it up from this registry.
+     */
+    public static ContextSources contextSources() {
+        return new ContextSources(List.of(new JiraSourceConnector()));
     }
 
     public static PipelineApplicationService createApplication(

@@ -33,8 +33,8 @@ public record RunReportItemResponse(
                 @Schema(description = "Classifier confidence in [0, 1]; null when unavailable.", nullable = true, minimum = "0", maximum = "1", example = "0.91") Double confidence,
 
                 @Schema(description = "MATCHED: a linked issue was found (task fields are set). NOT_FOUND: no "
-                                + "issue found or no provider configured. FAILED: the lookup failed (see errors). "
-                                + "SKIPPED: the run had contextEnabled=false. Null when the item never reached the "
+                                + "issue found. FAILED: the lookup failed (see errors). "
+                                + "SKIPPED: the run had no context source. Null when the item never reached the "
                                 + "context stage.", nullable = true) ContextStatus contextStatus,
 
                 @Schema(description = "Key of the linked issue; set only when contextStatus is MATCHED.", nullable = true, example = "DEBT-12") String taskKey,

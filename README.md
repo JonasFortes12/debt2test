@@ -86,6 +86,8 @@ Test generation calls an LLM. Configure it via environment variables or a local 
 | `DEBT_TESTER_MODEL`    | Model name                         | provider-specific (e.g. `gpt-4o`) |
 | `DEBT_TESTER_ENDPOINT` | Override API endpoint              | provider default                  |
 
+For the CLI, issue-tracker context comes from `DEBT_CONTEXT_JIRA_BASE_URL` (alone for a public Jira) plus `DEBT_CONTEXT_JIRA_EMAIL` and `DEBT_CONTEXT_JIRA_API_TOKEN` (together, for a private one). With no base URL, context is skipped. The CLI checks Jira access before cloning and exits with code `3` if the check fails. The REST API ignores these variables and takes the source per request (see below).
+
 Never commit a `.env` file with real credentials.
 
 ```bash
@@ -185,7 +187,7 @@ The API uses the same defaults as the CLI for model paths and output directory. 
 
 | Method | Path                                      | Result                                                                                             |
 | ------ | ----------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `POST` | `/api/pipeline/runs`                      | `202` with `{ "executionId": ... }`; `400` invalid body; `503` DB unavailable                      |
+| `POST` | `/api/pipeline/runs`                      | `202` with `{ "executionId": ... }`; `400` invalid body or rejected context source; `502` tracker unreachable; `503` DB unavailable |
 | `GET`  | `/api/pipeline/runs/{executionId}`        | `200` run status and counts; `404` unknown ID                                                      |
 | `GET`  | `/api/pipeline/runs/{executionId}/report` | `200` full per-candidate report; `404` unknown ID; `409` run not finished yet                      |
 | `POST` | `/api/pipeline/runs/{executionId}/cancel` | `202` `{ executionId, outcome }`, best-effort cancel; `404` unknown ID; `409` run already finished |
@@ -196,7 +198,7 @@ Request body for `POST /api/pipeline/runs` (only `repositoryUrl` is required):
 | ------------------------ | ------------------------------------------- | -------------------- |
 | `repositoryUrl`          | Git URL of the Java repository to analyze   | _(required)_         |
 | `revision`               | Branch, tag, or commit                      | repository's default |
-| `contextEnabled`         | Enrich SATD with issue-tracker context      | `false`              |
+| `context`                | Issue tracker to enrich SATD from: `{ "provider": "jira", "baseUrl": ..., "email": ..., "apiToken": ... }`. `email` + `apiToken` only for a private Jira, sent together. The server checks access before accepting the run. Omit to skip context. | _(none — context skipped)_ |
 | `allowHeuristicFallback` | Allow a heuristic classifier if models fail | `false`              |
 | `testFramework`          | Target test framework for generation        | `JUnit 5`            |
 

@@ -12,10 +12,26 @@ final class ApiExamples {
                         {
                           "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
                           "revision": "main",
-                          "contextEnabled": true,
+                          "context": {
+                            "provider": "jira",
+                            "baseUrl": "https://your-company.atlassian.net",
+                            "email": "dev@your-company.com",
+                            "apiToken": "<api-token>"
+                          },
                           "allowHeuristicFallback": true,
                           "testFramework": "JUnit 5"
                         }
+                        """;
+
+        static final String CREATE_RUN_PUBLIC_JIRA = """
+                        {
+                          "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
+                          "context": { "provider": "jira", "baseUrl": "https://public-jira.example.org" }
+                        }
+                        """;
+
+        static final String CREATE_RUN_WITHOUT_CONTEXT = """
+                        { "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project", "revision": "main" }
                         """;
 
         static final String RUN_ACCEPTED = """
@@ -116,6 +132,28 @@ final class ApiExamples {
 
         static final String MALFORMED_BODY = """
                         { "message": "malformed JSON request body", "fieldErrors": [] }
+                        """;
+
+        static final String UNSUPPORTED_CONTEXT_PROVIDER = """
+                        {
+                          "message": "unsupported context provider 'github'; supported: jira",
+                          "fieldErrors": [ { "field": "context.provider", "message": "must be one of: jira" } ]
+                        }
+                        """;
+
+        static final String CONTEXT_AUTH_REQUIRED = """
+                        {
+                          "message": "Jira at your-company.atlassian.net requires authentication; provide email and apiToken",
+                          "fieldErrors": []
+                        }
+                        """;
+
+        static final String CONTEXT_CREDENTIALS_REJECTED = """
+                        { "message": "Jira at your-company.atlassian.net rejected the supplied credentials", "fieldErrors": [] }
+                        """;
+
+        static final String CONTEXT_UNREACHABLE = """
+                        { "message": "could not reach Jira at your-company.atlassian.net to verify access", "fieldErrors": [] }
                         """;
 
         static final String PERSISTENCE_UNAVAILABLE = """

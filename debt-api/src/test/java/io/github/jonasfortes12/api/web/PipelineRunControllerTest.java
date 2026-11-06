@@ -4,7 +4,10 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -15,9 +18,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +36,12 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import io.github.jonasfortes12.api.PipelineRunLauncher;
+import io.github.jonasfortes12.api.dto.ContextSourceRequest;
+import io.github.jonasfortes12.core.context.ContextAccessCheck;
+import io.github.jonasfortes12.core.context.ContextSource;
+import io.github.jonasfortes12.core.port.ContextEnricher;
+import io.github.jonasfortes12.core.port.ContextSourceConnector;
+import io.github.jonasfortes12.orchestrator.context.ContextSources;
 import io.github.jonasfortes12.core.error.PipelineException;
 import io.github.jonasfortes12.core.model.ContextStatus;
 import io.github.jonasfortes12.core.model.ItemStatus;
@@ -61,6 +72,8 @@ class PipelineRunControllerTest {
         @MockitoBean
         private PipelineRunStore runStore;
 
+        private static final FakeConnector JIRA = new FakeConnector();
+
         @TestConfiguration
         static class TestConfig {
                 @Bean
@@ -69,6 +82,243 @@ class PipelineRunControllerTest {
                                         "https://example.test/repo", "preTrainedModels/DHbinaryClassifier.model",
                                         "preTrainedModels/DHmultiClassifier.model", Path.of("output"));
                 }
+
+                @Bean
+                ContextSources contextSources() {
+                        return new ContextSources(List.of(JIRA));
+                }
+        }
+
+        /** Stands in for the Jira connector: answers with a configurable check and records what it saw. */
+        static final class FakeConnector implements ContextSourceConnector {
+                private ContextAccessCheck nextCheck = ContextAccessCheck.ok();
+                private final List<ContextSource> verified = new ArrayList<>();
+
+                @Override
+                public String providerId() {
+                        return "jira";
+                }
+
+                @Override
+                public ContextAccessCheck verifyAccess(ContextSource source) {
+                        verified.add(source);
+                        return nextCheck;
+                }
+
+                @Override
+                public ContextEnricher enricherFor(ContextSource source) {
+                        throw new UnsupportedOperationException();
+                }
+        }
+
+        @BeforeEach
+        void resetConnector() {
+                JIRA.nextCheck = ContextAccessCheck.ok();
+                JIRA.verified.clear();
+        }
+
+        private static final String PRIVATE_JIRA_RUN = """
+                        {"repositoryUrl":"https://example.test/repo",
+                         "context":{"provider":"jira","baseUrl":"https://acme.atlassian.net",
+                                    "email":"dev@acme.test","apiToken":"s3cr3t-token"}}""";
+
+        private ArgumentCaptor<PipelineRequest> submittedRequest() {
+                ArgumentCaptor<PipelineRequest> request = ArgumentCaptor.forClass(PipelineRequest.class);
+                verify(launcher).submit(request.capture(), any());
+                return request;
+        }
+
+        @SuppressWarnings("unchecked")
+        private Optional<ContextSource> submittedSource() {
+                ArgumentCaptor<Optional<ContextSource>> source = ArgumentCaptor.forClass(Optional.class);
+                verify(launcher).submit(any(), source.capture());
+                return source.getValue();
+        }
+
+        private void postRun(String body, org.springframework.test.web.servlet.ResultMatcher expected)
+                        throws Exception {
+                mockMvc.perform(post("/api/pipeline/runs").contentType(MediaType.APPLICATION_JSON).content(body))
+                                .andExpect(expected);
+        }
+
+        @Test
+        void createWithoutContextSkipsVerificationAndDisablesContext() throws Exception {
+                when(launcher.submit(any(), any())).thenReturn("exec-1");
+
+                postRun("{\"repositoryUrl\":\"https://example.test/repo\"}", status().isAccepted());
+
+                assertTrue(JIRA.verified.isEmpty());
+                assertFalse(submittedRequest().getValue().context().enabled());
+                assertEquals(Optional.empty(), submittedSource());
+        }
+
+        @Test
+        void createWithNullContextSkipsVerification() throws Exception {
+                when(launcher.submit(any(), any())).thenReturn("exec-1");
+
+                postRun("{\"repositoryUrl\":\"https://example.test/repo\",\"context\":null}", status().isAccepted());
+
+                assertTrue(JIRA.verified.isEmpty());
+                assertFalse(submittedRequest().getValue().context().enabled());
+        }
+
+        @Test
+        void createWithPublicJiraVerifiesAnonymously() throws Exception {
+                when(launcher.submit(any(), any())).thenReturn("exec-1");
+
+                postRun("""
+                                {"repositoryUrl":"https://example.test/repo",
+                                 "context":{"provider":"jira","baseUrl":"https://acme.atlassian.net"}}""",
+                                status().isAccepted());
+
+                assertEquals(1, JIRA.verified.size());
+                assertFalse(JIRA.verified.get(0).authenticated());
+                assertTrue(submittedRequest().getValue().context().enabled());
+                assertEquals(Optional.of(JIRA.verified.get(0)), submittedSource());
+        }
+
+        @Test
+        void createWithPrivateJiraVerifiesWithCredentials() throws Exception {
+                when(launcher.submit(any(), any())).thenReturn("exec-1");
+
+                postRun(PRIVATE_JIRA_RUN, status().isAccepted());
+
+                assertTrue(JIRA.verified.get(0).authenticated());
+                assertEquals("dev@acme.test", JIRA.verified.get(0).credentials().orElseThrow().principal());
+        }
+
+        @Test
+        void createTreatsBlankCredentialsAsAnonymous() throws Exception {
+                when(launcher.submit(any(), any())).thenReturn("exec-1");
+
+                postRun("""
+                                {"repositoryUrl":"https://example.test/repo",
+                                 "context":{"provider":"jira","baseUrl":"https://acme.atlassian.net",
+                                            "email":"","apiToken":""}}""",
+                                status().isAccepted());
+
+                assertFalse(JIRA.verified.get(0).authenticated());
+        }
+
+        @Test
+        void createRejectsHalfCredentials() throws Exception {
+                mockMvc.perform(post("/api/pipeline/runs").contentType(MediaType.APPLICATION_JSON).content("""
+                                {"repositoryUrl":"https://example.test/repo",
+                                 "context":{"provider":"jira","baseUrl":"https://acme.atlassian.net",
+                                            "email":"dev@acme.test"}}"""))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.message").value("invalid request body"))
+                                .andExpect(jsonPath("$.fieldErrors[0].message")
+                                                .value("email and apiToken must be provided together"));
+                verify(launcher, never()).submit(any(), any());
+        }
+
+        @Test
+        void createRejectsMissingProvider() throws Exception {
+                mockMvc.perform(post("/api/pipeline/runs").contentType(MediaType.APPLICATION_JSON).content("""
+                                {"repositoryUrl":"https://example.test/repo",
+                                 "context":{"baseUrl":"https://acme.atlassian.net"}}"""))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.fieldErrors[0].field").value("context.provider"));
+        }
+
+        @Test
+        void createRejectsUnknownProvider() throws Exception {
+                mockMvc.perform(post("/api/pipeline/runs").contentType(MediaType.APPLICATION_JSON).content("""
+                                {"repositoryUrl":"https://example.test/repo",
+                                 "context":{"provider":"github","baseUrl":"https://github.com"}}"""))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.message")
+                                                .value("unsupported context provider 'github'; supported: jira"))
+                                .andExpect(jsonPath("$.fieldErrors[0].field").value("context.provider"))
+                                .andExpect(jsonPath("$.fieldErrors[0].message").value("must be one of: jira"));
+                verify(launcher, never()).submit(any(), any());
+                assertTrue(JIRA.verified.isEmpty());
+        }
+
+        @Test
+        void createRejectsMalformedBaseUrl() throws Exception {
+                mockMvc.perform(post("/api/pipeline/runs").contentType(MediaType.APPLICATION_JSON).content("""
+                                {"repositoryUrl":"https://example.test/repo",
+                                 "context":{"provider":"jira","baseUrl":"not a url"}}"""))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.message").value("invalid request body"))
+                                .andExpect(jsonPath("$.fieldErrors[0].field").value("context.baseUrl"))
+                                .andExpect(jsonPath("$.fieldErrors[0].message")
+                                                .value("must be an absolute http or https URL"));
+                verify(launcher, never()).submit(any(), any());
+        }
+
+        @Test
+        void createRejectsCredentialsEmbeddedInBaseUrl() throws Exception {
+                mockMvc.perform(post("/api/pipeline/runs").contentType(MediaType.APPLICATION_JSON).content("""
+                                {"repositoryUrl":"https://example.test/repo",
+                                 "context":{"provider":"jira","baseUrl":"https://dev%40acme.test:s3cr3t-token@acme.atlassian.net"}}"""))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.fieldErrors[0].field").value("context.baseUrl"))
+                                .andExpect(content().string(not(containsString("s3cr3t-token"))));
+                verify(launcher, never()).submit(any(), any());
+                assertTrue(JIRA.verified.isEmpty());
+        }
+
+        @Test
+        void createReturns400WhenJiraRequiresAuth() throws Exception {
+                JIRA.nextCheck = new ContextAccessCheck(ContextAccessCheck.Outcome.AUTH_REQUIRED,
+                                "Jira at acme.atlassian.net requires authentication; provide email and apiToken");
+
+                mockMvc.perform(post("/api/pipeline/runs").contentType(MediaType.APPLICATION_JSON).content("""
+                                {"repositoryUrl":"https://example.test/repo",
+                                 "context":{"provider":"jira","baseUrl":"https://acme.atlassian.net"}}"""))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.message").value(
+                                                "Jira at acme.atlassian.net requires authentication; provide email and apiToken"))
+                                .andExpect(jsonPath("$.fieldErrors").isEmpty());
+                verify(launcher, never()).submit(any(), any());
+        }
+
+        @Test
+        void createReturns400WhenCredentialsRejected() throws Exception {
+                JIRA.nextCheck = new ContextAccessCheck(ContextAccessCheck.Outcome.CREDENTIALS_REJECTED,
+                                "Jira at acme.atlassian.net rejected the supplied credentials");
+
+                mockMvc.perform(post("/api/pipeline/runs").contentType(MediaType.APPLICATION_JSON)
+                                .content(PRIVATE_JIRA_RUN))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(content().string(not(containsString("s3cr3t-token"))))
+                                .andExpect(content().string(not(containsString("dev@acme.test"))));
+                verify(launcher, never()).submit(any(), any());
+        }
+
+        @Test
+        void createReturns502WhenJiraUnreachable() throws Exception {
+                JIRA.nextCheck = new ContextAccessCheck(ContextAccessCheck.Outcome.UNREACHABLE,
+                                "could not reach Jira at acme.atlassian.net to verify access");
+
+                mockMvc.perform(post("/api/pipeline/runs").contentType(MediaType.APPLICATION_JSON)
+                                .content(PRIVATE_JIRA_RUN))
+                                .andExpect(status().isBadGateway())
+                                .andExpect(jsonPath("$.message")
+                                                .value("could not reach Jira at acme.atlassian.net to verify access"));
+                verify(launcher, never()).submit(any(), any());
+        }
+
+        @Test
+        void createIgnoresLegacyContextEnabledField() throws Exception {
+                when(launcher.submit(any(), any())).thenReturn("exec-1");
+
+                postRun("{\"repositoryUrl\":\"https://example.test/repo\",\"contextEnabled\":true}",
+                                status().isAccepted());
+
+                assertFalse(submittedRequest().getValue().context().enabled());
+        }
+
+        @Test
+        void contextSourceRequestToStringRedactsSecrets() {
+                String printed = new ContextSourceRequest("jira", "https://acme.atlassian.net", "dev@acme.test",
+                                "s3cr3t-token").toString();
+
+                assertFalse(printed.contains("dev@acme.test"));
+                assertFalse(printed.contains("s3cr3t-token"));
         }
 
         private static RunSnapshot snapshot(RunStatus status) {
@@ -79,7 +329,7 @@ class PipelineRunControllerTest {
 
         @Test
         void createReturns202WithTheAllocatedExecutionId() throws Exception {
-                when(launcher.submit(any())).thenReturn("exec-1");
+                when(launcher.submit(any(), any())).thenReturn("exec-1");
 
                 mockMvc.perform(post("/api/pipeline/runs")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -101,7 +351,7 @@ class PipelineRunControllerTest {
 
         @Test
         void createReturns503WhenPersistenceCannotRecordTheStart() throws Exception {
-                when(launcher.submit(any())).thenThrow(new PipelineException(new PipelineError(
+                when(launcher.submit(any(), any())).thenThrow(new PipelineException(new PipelineError(
                                 "persistence", "PERSISTENCE_WRITE_FAILED", "run store could not record run start",
                                 null, true)));
 
@@ -225,13 +475,13 @@ class PipelineRunControllerTest {
         }
 
         private PipelineRequest submittedRequest(String body) throws Exception {
-                when(launcher.submit(any())).thenReturn("exec-1");
+                when(launcher.submit(any(), any())).thenReturn("exec-1");
                 mockMvc.perform(post("/api/pipeline/runs")
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(body))
                                 .andExpect(status().isAccepted());
                 ArgumentCaptor<PipelineRequest> captor = ArgumentCaptor.forClass(PipelineRequest.class);
-                verify(launcher).submit(captor.capture());
+                verify(launcher).submit(captor.capture(), any());
                 return captor.getValue();
         }
 
@@ -280,7 +530,7 @@ class PipelineRunControllerTest {
         void createReturnsApiErrorForAWrongFieldType() throws Exception {
                 mockMvc.perform(post("/api/pipeline/runs")
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\"repositoryUrl\":\"https://example.test/repo\",\"contextEnabled\":\"yes\"}"))
+                                .content("{\"repositoryUrl\":\"https://example.test/repo\",\"allowHeuristicFallback\":\"yes\"}"))
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$.message").value("malformed JSON request body"));
         }

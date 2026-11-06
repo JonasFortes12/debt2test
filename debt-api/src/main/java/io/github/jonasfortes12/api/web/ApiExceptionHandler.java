@@ -39,6 +39,19 @@ class ApiExceptionHandler {
         return ResponseEntity.badRequest().body(new ApiError("invalid request body", fieldErrors));
     }
 
+    @ExceptionHandler(InvalidContextSourceException.class)
+    ResponseEntity<ApiError> invalidContextSource(InvalidContextSourceException exception) {
+        return ResponseEntity.badRequest()
+                .body(new ApiError(exception.getMessage(), List.of(exception.fieldError())));
+    }
+
+    /** An unreachable tracker is not the caller's fault (502); every other failed check is (400). */
+    @ExceptionHandler(ContextSourceRejectedException.class)
+    ResponseEntity<ApiError> contextSourceRejected(ContextSourceRejectedException exception) {
+        HttpStatus status = exception.trackerUnreachable() ? HttpStatus.BAD_GATEWAY : HttpStatus.BAD_REQUEST;
+        return ResponseEntity.status(status).body(ApiError.of(exception.getMessage()));
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     ResponseEntity<ApiError> unreadableBody(HttpMessageNotReadableException exception) {
         return ResponseEntity.badRequest().body(ApiError.of("malformed JSON request body"));

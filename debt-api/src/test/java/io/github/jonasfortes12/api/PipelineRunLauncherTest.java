@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -15,6 +16,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import io.github.jonasfortes12.core.context.ContextSource;
 import io.github.jonasfortes12.core.model.ClassificationOptions;
 import io.github.jonasfortes12.core.model.ContextRequest;
 import io.github.jonasfortes12.core.model.ExtractionOptions;
@@ -34,6 +36,7 @@ import io.github.jonasfortes12.core.result.ClassificationResult;
 import io.github.jonasfortes12.core.result.ContextEnrichmentResult;
 import io.github.jonasfortes12.core.result.ExtractionResult;
 import io.github.jonasfortes12.core.result.TestGenerationResult;
+import io.github.jonasfortes12.orchestrator.application.ContextEnricherFactory;
 import io.github.jonasfortes12.orchestrator.application.PipelineApplicationService;
 
 class PipelineRunLauncherTest {
@@ -93,21 +96,27 @@ class PipelineRunLauncherTest {
         DebtClassifier classifier = (candidates, options) -> new ClassificationResult(List.of(), List.of());
         ContextEnricher enricher = (debts, contextRequest) -> new ContextEnrichmentResult(List.of(), List.of());
         TestGenerator generator = (debts, options) -> new TestGenerationResult(List.of(), List.of());
+        // Written here, on the test thread: the run's stages may still be finishing on the
+        // launcher's background thread after the test returns, and a file created in @TempDir
+        // from there races JUnit's cleanup of that directory.
+        Path report = writeReportFile();
         return new PipelineApplicationService(
-                workspaceProvider, extractor, classifier, enricher, generator,
-                (result, options) -> {
-                    try {
-                        Path report = Files.createTempFile(tempDir, "launcher-report-", ".json");
-                        Files.writeString(report, "{}", StandardCharsets.UTF_8);
-                        return new ReportArtifact(List.of(report));
-                    } catch (IOException exception) {
-                        throw new RuntimeException(exception);
-                    }
-                },
+                workspaceProvider, extractor, classifier, ContextEnricherFactory.fixed(enricher), generator,
+                (result, options) -> new ReportArtifact(List.of(report)),
                 (req, workspace) -> req.runId().equals(PipelineApplicationService.AUTOMATIC_RUN_ID)
                         ? "resolved-run"
                         : req.runId(),
                 store);
+    }
+
+    private Path writeReportFile() {
+        try {
+            Path report = Files.createTempFile(tempDir, "launcher-report-", ".json");
+            Files.writeString(report, "{}", StandardCharsets.UTF_8);
+            return report;
+        } catch (IOException exception) {
+            throw new RuntimeException(exception);
+        }
     }
 
     @Test
@@ -118,13 +127,43 @@ class PipelineRunLauncherTest {
         PipelineRunLauncher launcher = new PipelineRunLauncher(
                 blockingService(store, startedLatch, releaseLatch), store);
         try {
-            String executionId = launcher.submit(request());
+            String executionId = launcher.submit(request(), Optional.empty());
 
             assertEquals(List.of(executionId), store.queuedIds,
                     "allocate() must have recorded the run before submit() returns");
             assertTrue(startedLatch.await(2, TimeUnit.SECONDS),
                     "execute() must run on the background thread without blocking submit()");
             releaseLatch.countDown();
+        } finally {
+            launcher.shutdown();
+        }
+    }
+
+    @Test
+    void submitHandsTheContextSourceToTheBackgroundRun() throws InterruptedException {
+        RecordingRunStore store = new RecordingRunStore();
+        ContextSource source = new ContextSource("jira", "https://acme.atlassian.net", Optional.empty());
+        List<Optional<ContextSource>> requestedSources = new CopyOnWriteArrayList<>();
+        CountDownLatch enricherRequested = new CountDownLatch(1);
+        PipelineApplicationService service = new PipelineApplicationService(
+                repositoryRequest -> new RepositoryWorkspace(Path.of("/tmp/ws"), repositoryRequest.repositoryUrl(), "abc"),
+                (workspace, options) -> new ExtractionResult(List.of(), List.of()),
+                (candidates, options) -> new ClassificationResult(List.of(), List.of()),
+                requested -> {
+                    requestedSources.add(requested);
+                    enricherRequested.countDown();
+                    return (debts, contextRequest) -> new ContextEnrichmentResult(List.of(), List.of());
+                },
+                (debts, options) -> new TestGenerationResult(List.of(), List.of()),
+                (result, options) -> new ReportArtifact(List.of()),
+                (req, workspace) -> req.runId(),
+                store);
+        PipelineRunLauncher launcher = new PipelineRunLauncher(service, store);
+        try {
+            launcher.submit(request(), Optional.of(source));
+
+            assertTrue(enricherRequested.await(2, TimeUnit.SECONDS));
+            assertEquals(List.of(Optional.of(source)), requestedSources);
         } finally {
             launcher.shutdown();
         }
@@ -138,7 +177,7 @@ class PipelineRunLauncherTest {
         PipelineRunLauncher launcher = new PipelineRunLauncher(
                 blockingService(store, startedLatch, releaseLatch), store);
         try {
-            String executionId = launcher.submit(request());
+            String executionId = launcher.submit(request(), Optional.empty());
             assertTrue(startedLatch.await(2, TimeUnit.SECONDS));
 
             PipelineRunLauncher.CancelOutcome outcome = launcher.cancel(executionId);

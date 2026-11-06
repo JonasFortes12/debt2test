@@ -25,7 +25,7 @@ public class OpenApiConfig {
          * Version of the HTTP contract, not of the Maven build. Bump it on a breaking
          * API change.
          */
-        static final String API_VERSION = "1.0.0";
+        static final String API_VERSION = "2.0.0";
 
         private static final String USAGE_GUIDE = """
                         Runs the Debt2Test pipeline on a Java repository: clones it, finds self-admitted technical \
@@ -43,6 +43,14 @@ public class OpenApiConfig {
                         `QUEUED` → `RUNNING` → `COMPLETED` | `COMPLETED_WITH_ERRORS` | `FAILED`, or `CANCELLED` \
                         from `QUEUED`/`RUNNING`. Runs execute one at a time on a single worker, so a new run stays \
                         `QUEUED` while another is running.
+
+                        ### Context sources
+                        To link SATD comments to issues, send a `context` object naming the tracker \
+                        (`provider`: `jira`), its `baseUrl`, and, for a private Jira, `email` and `apiToken` \
+                        together. A public Jira needs no credentials. The server checks access before accepting \
+                        the run: a private Jira without credentials or with rejected ones answers `400`, an \
+                        unreachable one `502`. Credentials are used for that run only and never stored or \
+                        returned. Without `context`, every item's `contextStatus` is `SKIPPED`.
 
                         """;
 

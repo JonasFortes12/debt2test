@@ -10,12 +10,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import io.github.jonasfortes12.core.error.PipelineException;
+import io.github.jonasfortes12.core.context.ContextSource;
 import io.github.jonasfortes12.core.model.ClassifiedDebt;
 import io.github.jonasfortes12.core.model.ContextStatus;
 import io.github.jonasfortes12.core.model.EnrichedSatdDebt;
@@ -50,7 +52,7 @@ public final class PipelineApplicationService {
     private final RepositoryWorkspaceProvider workspaceProvider;
     private final SatdExtractor extractor;
     private final DebtClassifier classifier;
-    private final ContextEnricher contextEnricher;
+    private final ContextEnricherFactory contextEnrichers;
     private final TestGenerator testGenerator;
     private final ReportSink reportSink;
     private final RunIdResolver runIdResolver;
@@ -65,8 +67,8 @@ public final class PipelineApplicationService {
             ContextEnricher contextEnricher,
             TestGenerator testGenerator,
             ReportSink reportSink) {
-        this(workspaceProvider, extractor, classifier, contextEnricher, testGenerator, reportSink,
-                (request, workspace) -> request.runId(), PipelineRunStore.NO_OP);
+        this(workspaceProvider, extractor, classifier, ContextEnricherFactory.fixed(contextEnricher),
+                testGenerator, reportSink, (request, workspace) -> request.runId(), PipelineRunStore.NO_OP);
     }
 
     public PipelineApplicationService(
@@ -77,15 +79,15 @@ public final class PipelineApplicationService {
             TestGenerator testGenerator,
             ReportSink reportSink,
             RunIdResolver runIdResolver) {
-        this(workspaceProvider, extractor, classifier, contextEnricher, testGenerator, reportSink,
-                runIdResolver, PipelineRunStore.NO_OP);
+        this(workspaceProvider, extractor, classifier, ContextEnricherFactory.fixed(contextEnricher),
+                testGenerator, reportSink, runIdResolver, PipelineRunStore.NO_OP);
     }
 
     public PipelineApplicationService(
             RepositoryWorkspaceProvider workspaceProvider,
             SatdExtractor extractor,
             DebtClassifier classifier,
-            ContextEnricher contextEnricher,
+            ContextEnricherFactory contextEnrichers,
             TestGenerator testGenerator,
             ReportSink reportSink,
             RunIdResolver runIdResolver,
@@ -93,7 +95,7 @@ public final class PipelineApplicationService {
         this.workspaceProvider = Objects.requireNonNull(workspaceProvider, "workspaceProvider must not be null");
         this.extractor = Objects.requireNonNull(extractor, "extractor must not be null");
         this.classifier = Objects.requireNonNull(classifier, "classifier must not be null");
-        this.contextEnricher = Objects.requireNonNull(contextEnricher, "contextEnricher must not be null");
+        this.contextEnrichers = Objects.requireNonNull(contextEnrichers, "contextEnrichers must not be null");
         this.testGenerator = Objects.requireNonNull(testGenerator, "testGenerator must not be null");
         this.reportSink = Objects.requireNonNull(reportSink, "reportSink must not be null");
         this.runIdResolver = Objects.requireNonNull(runIdResolver, "runIdResolver must not be null");
@@ -101,13 +103,23 @@ public final class PipelineApplicationService {
     }
 
     public PipelineResult run(PipelineRequest request) {
+        return run(request, Optional.empty());
+    }
+
+    /**
+     * Runs every stage, reading issue-tracker context from {@code contextSource} when present.
+     * The source may carry credentials: it is used to build this run's enricher and is never
+     * logged or recorded.
+     */
+    public PipelineResult run(PipelineRequest request, Optional<ContextSource> contextSource) {
         Objects.requireNonNull(request, "request must not be null");
+        Objects.requireNonNull(contextSource, "contextSource must not be null");
 
         String executionId = UUID.randomUUID().toString();
         ExecutionState state = new ExecutionState();
         record(state, "run start", store -> store.runStarted(executionId, request));
 
-        return runStages(executionId, request, state);
+        return runStages(executionId, request, contextSource, state);
     }
 
     /**
@@ -144,15 +156,26 @@ public final class PipelineApplicationService {
      * {@link #allocate(PipelineRequest)}.
      */
     public PipelineResult execute(String executionId, PipelineRequest request) {
+        return execute(executionId, request, Optional.empty());
+    }
+
+    /**
+     * Runs every stage for a run already allocated by {@link #allocate(PipelineRequest)}, reading
+     * context from {@code contextSource} when present (see {@link #run(PipelineRequest, Optional)}).
+     */
+    public PipelineResult execute(
+            String executionId, PipelineRequest request, Optional<ContextSource> contextSource) {
         Objects.requireNonNull(executionId, "executionId must not be null");
         Objects.requireNonNull(request, "request must not be null");
+        Objects.requireNonNull(contextSource, "contextSource must not be null");
 
         ExecutionState state = new ExecutionState();
         record(state, "run dequeue", store -> store.runDequeued(executionId));
-        return runStages(executionId, request, state);
+        return runStages(executionId, request, contextSource, state);
     }
 
-    private PipelineResult runStages(String executionId, PipelineRequest request, ExecutionState state) {
+    private PipelineResult runStages(
+            String executionId, PipelineRequest request, Optional<ContextSource> contextSource, ExecutionState state) {
         OrchestrationUtils.logPipeline(
                 "preparing repository workspace for " + UrlSanitizer.sanitize(request.repository().repositoryUrl()));
         RepositoryWorkspace workspace;
@@ -186,7 +209,7 @@ public final class PipelineApplicationService {
         PipelineResult assembled;
         PipelineError releaseError;
         try {
-            executeStages(executionId, executionRequest, workspace, state);
+            executeStages(executionId, executionRequest, contextSource, workspace, state);
             assembled = assemble(executionRequest.runId(), workspace, state);
         } finally {
             releaseError = releaseFailure(workspace);
@@ -260,7 +283,8 @@ public final class PipelineApplicationService {
     }
 
     private void executeStages(
-            String executionId, PipelineRequest request, RepositoryWorkspace workspace, ExecutionState state) {
+            String executionId, PipelineRequest request, Optional<ContextSource> contextSource,
+            RepositoryWorkspace workspace, ExecutionState state) {
         OrchestrationUtils.logPipeline("extracting SATD candidates...");
         ExtractionResult extraction;
         try {
@@ -303,7 +327,7 @@ public final class PipelineApplicationService {
         OrchestrationUtils.logPipeline("enriching context for " + satd.size() + " SATD candidate(s)...");
         ContextEnrichmentResult enrichment;
         try {
-            enrichment = contextEnricher.enrich(satd, request.context());
+            enrichment = contextEnrichers.forSource(contextSource).enrich(satd, request.context());
         } catch (Exception ignored) {
             PipelineError failure = stageFailure("context", "CONTEXT_STAGE_FAILED");
             state.addError(failure);

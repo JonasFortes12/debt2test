@@ -6,6 +6,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import java.util.Optional;
+
+import io.github.jonasfortes12.core.context.ContextSource;
 import io.github.jonasfortes12.core.model.PipelineRequest;
 import io.github.jonasfortes12.core.port.PipelineRunStore;
 import io.github.jonasfortes12.orchestrator.application.PipelineApplicationService;
@@ -30,10 +33,13 @@ public final class PipelineRunLauncher {
         this.runStore = runStore;
     }
 
-    /** Allocates and records the run synchronously, then runs its stages on the background thread. */
-    public String submit(PipelineRequest request) {
+    /**
+     * Allocates and records the run synchronously, then runs its stages on the background thread.
+     * The context source (which may carry credentials) lives only in that queued task.
+     */
+    public String submit(PipelineRequest request, Optional<ContextSource> contextSource) {
         String executionId = application.allocate(request);
-        Future<?> future = executor.submit(() -> runExecute(executionId, request));
+        Future<?> future = executor.submit(() -> runExecute(executionId, request, contextSource));
         inFlight.put(executionId, future);
         return executionId;
     }
@@ -43,9 +49,9 @@ public final class PipelineRunLauncher {
      * guards against something truly unexpected escaping it (e.g. a bug deep inside assemble() or
      * the report sink), so the run's row doesn't stay RUNNING forever with zero trace of why.
      */
-    private void runExecute(String executionId, PipelineRequest request) {
+    private void runExecute(String executionId, PipelineRequest request, Optional<ContextSource> contextSource) {
         try {
-            application.execute(executionId, request);
+            application.execute(executionId, request, contextSource);
         } catch (RuntimeException unexpected) {
             OrchestrationUtils.logPipeline(
                     "execution " + executionId + " failed unexpectedly: " + unexpected.getMessage());

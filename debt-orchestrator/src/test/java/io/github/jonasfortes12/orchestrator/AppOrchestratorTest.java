@@ -2,11 +2,17 @@ package io.github.jonasfortes12.orchestrator;
 
 import io.github.jonasfortes12.classifier.WekaDebtHunterClassifier;
 import io.github.jonasfortes12.context.chain.ContextHandler;
+import io.github.jonasfortes12.core.context.ContextAccessCheck;
+import io.github.jonasfortes12.core.context.ContextSource;
 import io.github.jonasfortes12.core.model.PipelineRequest;
+import io.github.jonasfortes12.core.port.ContextEnricher;
+import io.github.jonasfortes12.core.port.ContextSourceConnector;
+import io.github.jonasfortes12.orchestrator.context.ContextSources;
 import io.github.jonasfortes12.core.model.PipelineResult;
 import io.github.jonasfortes12.core.model.ReportOptions;
 import io.github.jonasfortes12.core.model.RepositoryWorkspace;
 import io.github.jonasfortes12.core.model.RunStatus;
+import io.github.jonasfortes12.orchestrator.application.ContextEnricherFactory;
 import io.github.jonasfortes12.orchestrator.application.PipelineApplicationService;
 import io.github.jonasfortes12.extractor.AstCommentExtractor;
 import io.github.jonasfortes12.extractor.GitCloneService;
@@ -15,17 +21,21 @@ import io.github.jonasfortes12.tester.LlmConfig;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AppOrchestratorTest {
 
@@ -174,6 +184,87 @@ class AppOrchestratorTest {
     }
 
     @Test
+    void createRequestDisablesContextWithoutSource() {
+        AppOrchestrator.CliOptions options = AppOrchestrator.parseArguments(new String[0]);
+
+        assertFalse(AppOrchestrator.createRequest(options, Optional.empty()).context().enabled());
+    }
+
+    @Test
+    void createRequestEnablesContextWithSource() {
+        AppOrchestrator.CliOptions options = AppOrchestrator.parseArguments(new String[0]);
+
+        assertTrue(AppOrchestrator.createRequest(options, Optional.of(JIRA_SOURCE)).context().enabled());
+    }
+
+    @Test
+    void executePipelineHandsTheSourceStateToTheRequest() {
+        AppOrchestrator.CliOptions options = AppOrchestrator.parseArguments(new String[0]);
+        List<Boolean> contextEnabled = new ArrayList<>();
+
+        AppOrchestrator.executePipeline(options, Optional.of(JIRA_SOURCE), request -> {
+            contextEnabled.add(request.context().enabled());
+            return result(request.runId(), RunStatus.COMPLETED);
+        });
+
+        assertEquals(List.of(true), contextEnabled);
+    }
+
+    @Test
+    void verifyContextSourceSkipsCheckWithoutSource() {
+        CountingConnector connector = new CountingConnector(ContextAccessCheck.ok());
+
+        assertEquals(Optional.empty(), AppOrchestrator.verifyContextSource(
+                Optional.empty(), new ContextSources(List.of(connector))));
+        assertEquals(0, connector.calls);
+    }
+
+    @Test
+    void verifyContextSourcePassesOnOkCheck() {
+        CountingConnector connector = new CountingConnector(ContextAccessCheck.ok());
+
+        assertEquals(Optional.empty(), AppOrchestrator.verifyContextSource(
+                Optional.of(JIRA_SOURCE), new ContextSources(List.of(connector))));
+        assertEquals(1, connector.calls);
+    }
+
+    @Test
+    void verifyContextSourceStopsOnFailedCheck() {
+        CountingConnector connector = new CountingConnector(
+                new ContextAccessCheck(ContextAccessCheck.Outcome.AUTH_REQUIRED, "jira needs a token"));
+        PrintStream originalOut = System.out;
+        ByteArrayOutputStream captured = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(captured, true, StandardCharsets.UTF_8));
+        Optional<ExitCode> exitCode;
+        try {
+            exitCode = AppOrchestrator.verifyContextSource(
+                    Optional.of(JIRA_SOURCE), new ContextSources(List.of(connector)));
+        } finally {
+            System.setOut(originalOut);
+        }
+
+        assertEquals(Optional.of(ExitCode.CONTEXT_UNAVAILABLE), exitCode);
+        assertEquals(3, ExitCode.CONTEXT_UNAVAILABLE.code());
+        String output = captured.toString(StandardCharsets.UTF_8);
+        assertTrue(output.contains("status=FAILED"));
+        assertTrue(output.contains("jira needs a token"));
+    }
+
+    @Test
+    void runIdDependsOnContextEnabled() {
+        AppOrchestrator.CliOptions options = AppOrchestrator.parseArguments(new String[0]);
+        LlmConfig config = new LlmConfig("openai", "", "gpt-test", "");
+
+        assertNotEquals(AppOrchestrator.runIdFor(options, config, null, true),
+                AppOrchestrator.runIdFor(options, config, null, false));
+    }
+
+    @Test
+    void contextSourcesRegisterJira() {
+        assertEquals(List.of("jira"), List.copyOf(AppOrchestrator.contextSources().supportedProviders()));
+    }
+
+    @Test
     void executeFromCliReturnsAnInvalidArgumentExitCodeWithoutInvokingThePipeline() {
         assertEquals(ExitCode.INVALID_ARGUMENTS,
                 AppOrchestrator.executeFromCli(new String[]{"repo", "binary", "multi", "output", "run", "revision", "extra"}));
@@ -190,7 +281,7 @@ class AppOrchestratorTest {
         assertEquals(GitCloneService.class, implementationType(application, "workspaceProvider"));
         assertEquals(AstCommentExtractor.class, implementationType(application, "extractor"));
         assertEquals(WekaDebtHunterClassifier.class, implementationType(application, "classifier"));
-        assertEquals(ContextHandler.class, implementationType(application, "contextEnricher"));
+        assertEquals(ContextHandler.class, contextEnricherType(application));
         assertEquals(io.github.jonasfortes12.tester.TestGeneratorService.class,
                 implementationType(application, "testGenerator"));
         assertEquals(io.github.jonasfortes12.orchestrator.reporting.FileReportSink.class,
@@ -203,6 +294,41 @@ class AppOrchestratorTest {
         field.setAccessible(true);
         Object value = field.get(application);
         return value.getClass();
+    }
+
+    private static Class<?> contextEnricherType(PipelineApplicationService application) throws Exception {
+        Field field = PipelineApplicationService.class.getDeclaredField("contextEnrichers");
+        field.setAccessible(true);
+        ContextEnricherFactory factory = (ContextEnricherFactory) field.get(application);
+        return factory.forSource(Optional.empty()).getClass();
+    }
+
+    private static final ContextSource JIRA_SOURCE =
+            new ContextSource("jira", "https://acme.atlassian.net", Optional.empty());
+
+    private static final class CountingConnector implements ContextSourceConnector {
+        private final ContextAccessCheck check;
+        private int calls;
+
+        private CountingConnector(ContextAccessCheck check) {
+            this.check = check;
+        }
+
+        @Override
+        public String providerId() {
+            return "jira";
+        }
+
+        @Override
+        public ContextAccessCheck verifyAccess(ContextSource source) {
+            calls++;
+            return check;
+        }
+
+        @Override
+        public ContextEnricher enricherFor(ContextSource source) {
+            throw new UnsupportedOperationException();
+        }
     }
 
     private static PipelineResult result(String runId, RunStatus status) {
