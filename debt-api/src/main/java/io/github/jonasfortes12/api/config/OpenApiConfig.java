@@ -7,12 +7,15 @@ import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import io.github.jonasfortes12.api.access.web.AccessSecurity;
+import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.media.Content;
 import io.swagger.v3.oas.models.media.MediaType;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.responses.ApiResponse;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 
 /**
  * API-level Swagger metadata: the usage guide a front-end developer reads
@@ -25,15 +28,28 @@ public class OpenApiConfig {
          * Version of the HTTP contract, not of the Maven build. Bump it on a breaking
          * API change.
          */
-        static final String API_VERSION = "2.0.0";
+        static final String API_VERSION = "3.0.0";
 
         private static final String USAGE_GUIDE = """
                         Runs the Debt2Test pipeline on a Java repository: clones it, finds self-admitted technical \
                         debt (SATD) comments, classifies them with the DebtHunter models, optionally looks up \
                         issue-tracker context, and generates candidate tests with an LLM.
 
+                        ### Access codes
+                        Every `/api/pipeline/**` call needs a single-run access code, sent as \
+                        `Authorization: Bearer <code>` (the **Authorize** button above). To get one: read \
+                        `GET /api/access/terms`, then `POST /api/access/requests` with name, email and the accepted \
+                        terms version; the code arrives by email and is valid for 72 hours. One code starts exactly \
+                        one run; after that it reads, polls and cancels only that run, for 30 days. Each email can \
+                        start a limited number of runs. `GET /api/access/code` tells what a code currently allows.
+
+                        * `401`: no code, an unknown code, or an expired one.
+                        * `403`: the code has already started its run.
+                        * `404`: the run does not exist or was not started by this code.
+
                         ### How to use it
-                        1. `POST /api/pipeline/runs` starts a run and answers `202` with its `executionId`.\n
+                        1. `POST /api/pipeline/runs` (with the access code) starts a run and answers `202` with its \
+                        `executionId`.\n
                         2. Poll `GET /api/pipeline/runs/{executionId}` every few seconds until `status` is terminal \
                         (`COMPLETED`, `COMPLETED_WITH_ERRORS`, `FAILED` or `CANCELLED`).\n
                         3. `GET /api/pipeline/runs/{executionId}/report` returns the summary and one item per \
@@ -56,10 +72,19 @@ public class OpenApiConfig {
 
         @Bean
         public OpenAPI debtApiOpenApi() {
-                return new OpenAPI().info(new Info()
-                                .title("Debt2Test API")
-                                .version(API_VERSION)
-                                .description(USAGE_GUIDE));
+                return new OpenAPI()
+                                .info(new Info()
+                                                .title("Debt2Test API")
+                                                .version(API_VERSION)
+                                                .description(USAGE_GUIDE))
+                                .components(new Components().addSecuritySchemes(AccessSecurity.SCHEME,
+                                                new SecurityScheme()
+                                                                .type(SecurityScheme.Type.HTTP)
+                                                                .scheme("bearer")
+                                                                .bearerFormat("D2T access code")
+                                                                .description("Single-run access code from the email sent "
+                                                                                + "by POST /api/access/requests, e.g. "
+                                                                                + "D2T-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX.")));
         }
 
         /**
@@ -76,6 +101,22 @@ public class OpenApiConfig {
                                                                 .schema(new Schema<>()
                                                                                 .$ref("#/components/schemas/ApiError"))
                                                                 .example(Map.of("message", "internal server error",
+                                                                                "fieldErrors", List.of())))))));
+        }
+
+        /**
+         * Documents the 401 once for every operation that requires an access code, as for the 500.
+         */
+        @Bean
+        public OpenApiCustomizer accessCodeRequiredResponse() {
+                return openApi -> openApi.getPaths().values().forEach(path -> path.readOperations().stream()
+                                .filter(operation -> operation.getSecurity() != null && !operation.getSecurity().isEmpty())
+                                .forEach(operation -> operation.getResponses().computeIfAbsent("401", status -> new ApiResponse()
+                                                .description("No access code was sent, or it is unknown or expired. "
+                                                                + "Get a new one from POST /api/access/requests.")
+                                                .content(new Content().addMediaType("application/json", new MediaType()
+                                                                .schema(new Schema<>().$ref("#/components/schemas/ApiError"))
+                                                                .example(Map.of("message", "missing, unknown or expired access code",
                                                                                 "fieldErrors", List.of())))))));
         }
 }

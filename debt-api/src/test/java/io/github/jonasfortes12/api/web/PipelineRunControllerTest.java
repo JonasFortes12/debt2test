@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -21,6 +22,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +31,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
@@ -36,6 +40,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import io.github.jonasfortes12.api.PipelineRunLauncher;
+import io.github.jonasfortes12.api.access.AccessService;
+import io.github.jonasfortes12.api.access.web.AccessWebConfig;
 import io.github.jonasfortes12.api.dto.ContextSourceRequest;
 import io.github.jonasfortes12.core.context.ContextAccessCheck;
 import io.github.jonasfortes12.core.context.ContextSource;
@@ -52,17 +58,14 @@ import io.github.jonasfortes12.core.model.RunReportItem;
 import io.github.jonasfortes12.core.model.RunSnapshot;
 import io.github.jonasfortes12.core.model.RunStatus;
 import io.github.jonasfortes12.core.port.PipelineRunStore;
+import io.github.jonasfortes12.core.port.ReportSink;
 import io.github.jonasfortes12.orchestrator.AppOrchestrator;
 
-@WebMvcTest(PipelineRunController.class)
+/** The access-code check is excluded here and covered by AccessCodeInterceptorTest; the code is spent via a mocked AccessService. */
+@WebMvcTest(controllers = PipelineRunController.class, excludeFilters = @ComponentScan.Filter(
+                type = FilterType.ASSIGNABLE_TYPE, classes = AccessWebConfig.class))
 @Import(PipelineRunControllerTest.TestConfig.class)
-@TestPropertySource(properties = {
-                "spring.main.allow-bean-definition-overriding=true",
-                "DEBT_PERSISTENCE_ENABLED=true",
-                "DEBT_DB_URL=jdbc:postgresql://localhost:1/unreachable-test-db",
-                "DEBT_DB_USERNAME=test",
-                "DEBT_DB_PASSWORD=test"
-})
+@TestPropertySource(properties = "spring.main.allow-bean-definition-overriding=true")
 class PipelineRunControllerTest {
 
         @Autowired
@@ -71,6 +74,10 @@ class PipelineRunControllerTest {
         private PipelineRunLauncher launcher;
         @MockitoBean
         private PipelineRunStore runStore;
+        @MockitoBean
+        private ReportSink databaseReportSink;
+        @MockitoBean
+        private AccessService accessService;
 
         private static final FakeConnector JIRA = new FakeConnector();
 
@@ -115,6 +122,34 @@ class PipelineRunControllerTest {
         void resetConnector() {
                 JIRA.nextCheck = ContextAccessCheck.ok();
                 JIRA.verified.clear();
+        }
+
+        @BeforeEach
+        @SuppressWarnings("unchecked")
+        void spendingACodeRunsTheSubmission() {
+                when(accessService.startRun(any(), any(), any()))
+                                .thenAnswer(call -> ((Supplier<String>) call.getArgument(1)).get());
+        }
+
+        @Test
+        void createSpendsTheBearerCodeAndAnswersWithItsExecutionId() throws Exception {
+                when(launcher.submit(any(), any())).thenReturn("3f2b8c1e-9a4d-4e7b-8f6a-2c1d5e9b7a40");
+
+                mockMvc.perform(post("/api/pipeline/runs").header("Authorization", "Bearer D2T-AAAA")
+                                .contentType(MediaType.APPLICATION_JSON).content("{\"repositoryUrl\":\"https://example.test/repo\"}"))
+                                .andExpect(status().isAccepted())
+                                .andExpect(jsonPath("$.executionId").value("3f2b8c1e-9a4d-4e7b-8f6a-2c1d5e9b7a40"));
+
+                verify(accessService).startRun(eq("D2T-AAAA"), any(), any());
+        }
+
+        @Test
+        void rejectedContextSourceDoesNotSpendCode() throws Exception {
+                JIRA.nextCheck = new ContextAccessCheck(ContextAccessCheck.Outcome.AUTH_REQUIRED, "auth required");
+
+                postRun(PRIVATE_JIRA_RUN, status().isBadRequest());
+
+                verify(accessService, never()).startRun(any(), any(), any());
         }
 
         private static final String PRIVATE_JIRA_RUN = """

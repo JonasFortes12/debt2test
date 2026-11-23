@@ -1,0 +1,13 @@
+Hello,
+
+Here is your Debt2Test access code:
+
+    {{code}}
+{{linkLine}}
+The code starts one pipeline run and is valid until {{expiresAt}} (UTC).
+After you start a run with it, the same code lets you follow that run and read its report for 30 days.
+Runs remaining for your email, including this one: {{runsRemaining}}.
+
+You accepted the Debt2Test terms of use, version {{termsVersion}}.
+
+If you did not ask for this code, you can ignore this message.

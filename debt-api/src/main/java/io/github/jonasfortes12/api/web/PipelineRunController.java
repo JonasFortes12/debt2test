@@ -1,15 +1,21 @@
 package io.github.jonasfortes12.api.web;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import io.github.jonasfortes12.api.PipelineRunLauncher;
+import io.github.jonasfortes12.api.access.AccessService;
+import io.github.jonasfortes12.api.access.web.AccessSecurity;
+import io.github.jonasfortes12.api.access.web.BearerTokens;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import java.util.Optional;
 
 import io.github.jonasfortes12.api.dto.CancelResponse;
@@ -46,7 +52,9 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/pipeline/runs")
-@Tag(name = "Pipeline runs", description = "Start a run, poll its status, read its report, or cancel it.")
+@Tag(name = "Pipeline runs", description = "Start a run, poll its status, read its report, or cancel it. Every "
+                + "operation needs an access code (Authorization: Bearer <code>).")
+@SecurityRequirement(name = AccessSecurity.SCHEME)
 public class PipelineRunController {
 
         private static final String JSON = "application/json";
@@ -57,14 +65,17 @@ public class PipelineRunController {
         private final PipelineRunStore runStore;
         private final AppOrchestrator.CliOptions cliOptions;
         private final ContextSources contextSources;
+        private final AccessService accessService;
 
         public PipelineRunController(
                         PipelineRunLauncher launcher, PipelineRunStore runStore,
-                        AppOrchestrator.CliOptions cliOptions, ContextSources contextSources) {
+                        AppOrchestrator.CliOptions cliOptions, ContextSources contextSources,
+                        AccessService accessService) {
                 this.launcher = launcher;
                 this.runStore = runStore;
                 this.cliOptions = cliOptions;
                 this.contextSources = contextSources;
+                this.accessService = accessService;
         }
 
         @PostMapping
@@ -75,7 +86,10 @@ public class PipelineRunController {
                         + "(or 502 when the tracker is unreachable) and no run is recorded. Problems found "
                         + "while running (unreachable repository, unknown revision) end the run as FAILED "
                         + "instead of failing this call. Model paths and the output directory are server "
-                        + "configuration and cannot be set per request.")
+                        + "configuration and cannot be set per request. Needs an UNUSED access code, which this "
+                        + "call spends: afterwards the code reads, polls and cancels only this run. A request "
+                        + "rejected with 400, 502 or 503 does not spend the code. If the run is created but cannot "
+                        + "be linked to the code, it is cancelled, the code is released, and the call answers 503.")
         @ApiResponses({
                         @ApiResponse(responseCode = "202", description = "Run accepted and queued. Poll its status next.", content = @Content(mediaType = JSON, schema = @Schema(implementation = RunAcceptedResponse.class), examples = @ExampleObject(value = ApiExamples.RUN_ACCEPTED))),
                         @ApiResponse(responseCode = "400", description = "The body is not valid JSON, has a wrongly typed "
@@ -93,6 +107,8 @@ public class PipelineRunController {
                                         + "timed out, was rate-limiting, or failed while its access was being checked. "
                                         + "No run is recorded; retry later or check baseUrl.", content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class), examples = @ExampleObject(value = ApiExamples.CONTEXT_UNREACHABLE))),
                         @ApiResponse(responseCode = "415", description = "Content-Type is not application/json.", content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class))),
+                        @ApiResponse(responseCode = "403", description = "The access code has already started its run, "
+                                        + "or its email has reached its run quota. Ask for a new code to start another run.", content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class), examples = @ExampleObject(value = ApiExamples.ACCESS_CODE_USED))),
                         @ApiResponse(responseCode = "503", description = "The run could not be recorded because the "
                                         + "database is unavailable. Nothing was started; retry later.", content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class), examples = @ExampleObject(value = ApiExamples.PERSISTENCE_UNAVAILABLE)))
         })
@@ -100,9 +116,12 @@ public class PipelineRunController {
                         @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Repository to analyse and run options. Only repositoryUrl is required.", content = @Content(mediaType = JSON, examples = {
                         @ExampleObject(name = "private-jira", summary = "Mock repository with context from a private Jira", value = ApiExamples.CREATE_RUN),
                         @ExampleObject(name = "public-jira", summary = "Context from a public Jira (no credentials)", value = ApiExamples.CREATE_RUN_PUBLIC_JIRA),
-                        @ExampleObject(name = "no-context", summary = "Skip issue-tracker context", value = ApiExamples.CREATE_RUN_WITHOUT_CONTEXT) })) @Valid @RequestBody CreateRunRequest request) {
+                        @ExampleObject(name = "no-context", summary = "Skip issue-tracker context", value = ApiExamples.CREATE_RUN_WITHOUT_CONTEXT) })) @Valid @RequestBody CreateRunRequest request,
+                        @Parameter(hidden = true) @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
                 Optional<ContextSource> contextSource = verifiedContextSource(request.context());
-                String executionId = launcher.submit(toPipelineRequest(request, contextSource), contextSource);
+                String executionId = accessService.startRun(BearerTokens.from(authorization),
+                                () -> launcher.submit(toPipelineRequest(request, contextSource), contextSource),
+                                launcher::cancel);
                 return new RunAcceptedResponse(executionId);
         }
 
@@ -112,7 +131,7 @@ public class PipelineRunController {
                         + "filled in only when the run finishes.")
         @ApiResponses({
                         @ApiResponse(responseCode = "200", description = "The run's current status.", content = @Content(mediaType = JSON, schema = @Schema(implementation = RunStatusResponse.class), examples = @ExampleObject(value = ApiExamples.RUN_STATUS_RUNNING))),
-                        @ApiResponse(responseCode = "404", description = "No run has this execution ID.", content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class), examples = @ExampleObject(value = ApiExamples.RUN_NOT_FOUND)))
+                        @ApiResponse(responseCode = "404", description = "No run has this execution ID, or this access code did not start it.", content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class), examples = @ExampleObject(value = ApiExamples.RUN_NOT_FOUND)))
         })
         public RunStatusResponse status(
                         @Parameter(description = EXECUTION_ID_DESCRIPTION, example = ApiExamples.EXECUTION_ID) @PathVariable("executionId") String executionId) {
@@ -125,7 +144,7 @@ public class PipelineRunController {
                         + "A terminal run's report never changes.")
         @ApiResponses({
                         @ApiResponse(responseCode = "200", description = "The run's summary, items and run-level errors.", content = @Content(mediaType = JSON, schema = @Schema(implementation = RunReportResponse.class), examples = @ExampleObject(value = ApiExamples.RUN_REPORT))),
-                        @ApiResponse(responseCode = "404", description = "No run has this execution ID.", content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class), examples = @ExampleObject(value = ApiExamples.RUN_NOT_FOUND))),
+                        @ApiResponse(responseCode = "404", description = "No run has this execution ID, or this access code did not start it.", content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class), examples = @ExampleObject(value = ApiExamples.RUN_NOT_FOUND))),
                         @ApiResponse(responseCode = "409", description = "The run is still QUEUED or RUNNING; keep polling "
                                         + "its status.", content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class), examples = @ExampleObject(value = ApiExamples.RUN_NOT_FINISHED)))
         })
@@ -150,7 +169,7 @@ public class PipelineRunController {
         @ApiResponses({
                         @ApiResponse(responseCode = "202", description = "The run is now CANCELLED; outcome says whether "
                                         + "this server was actually running it.", content = @Content(mediaType = JSON, schema = @Schema(implementation = CancelResponse.class), examples = @ExampleObject(value = ApiExamples.CANCEL_ACCEPTED))),
-                        @ApiResponse(responseCode = "404", description = "No run has this execution ID.", content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class), examples = @ExampleObject(value = ApiExamples.RUN_NOT_FOUND))),
+                        @ApiResponse(responseCode = "404", description = "No run has this execution ID, or this access code did not start it.", content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class), examples = @ExampleObject(value = ApiExamples.RUN_NOT_FOUND))),
                         @ApiResponse(responseCode = "409", description = "The run has already reached a terminal status.", content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class), examples = @ExampleObject(value = ApiExamples.RUN_ALREADY_FINISHED)))
         })
         public CancelResponse cancel(

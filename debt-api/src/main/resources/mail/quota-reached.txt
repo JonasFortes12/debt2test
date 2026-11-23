@@ -1,0 +1,6 @@
+Hello,
+
+You asked for a Debt2Test access code, but this email has already used all {{runQuota}} runs
+available to it, so no new code was issued.
+
+If you need more runs for the study, reply to the study contact listed in the terms of use.

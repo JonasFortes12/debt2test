@@ -39,6 +39,7 @@ graph TD
     ORCH --> PERSISTENCE
     API --> CORE
     API --> ORCH
+    API --> PERSISTENCE
 ```
 
 ```
@@ -47,12 +48,12 @@ debt-extractor      SatdExtractor + RepositoryWorkspaceProvider impls (JGit clon
 debt-classifier     DebtClassifier impl (Weka DebtHunter binary + multi-class models)
 debt-context        ContextEnricher impl (issue-reference extraction + provider chain)
 debt-tester         TestGenerator impl (OpenAI / Anthropic / Gemini adapters)
-debt-persistence    PipelineRunStore + DatabaseReportSink impls (Flyway-managed PostgreSQL); opt-in via DEBT_PERSISTENCE_ENABLED
+debt-persistence    PipelineRunStore + DatabaseReportSink impls (Flyway-managed PostgreSQL); CLI opt-in via DEBT_PERSISTENCE_ENABLED
 debt-orchestrator   composition root: CLI entry point, pipeline sequencing, report writing
-debt-api            Spring Boot module exposing the pipeline over HTTP (create/status/report/cancel a run); depends only on debt-core + debt-orchestrator
+debt-api            Spring Boot module exposing the pipeline over HTTP (create/status/report/cancel a run) behind single-run email access codes; depends on debt-core + debt-orchestrator + debt-persistence
 ```
 
-`debt-extractor`, `debt-classifier`, `debt-context`, `debt-tester`, and `debt-persistence` never depend on each other — they only implement `debt-core` port interfaces. Only `debt-orchestrator` wires concrete implementations together, and `debt-api` depends on it to run the pipeline asynchronously behind 4 REST endpoints.
+`debt-extractor`, `debt-classifier`, `debt-context`, `debt-tester`, and `debt-persistence` never depend on each other — they only implement `debt-core` port interfaces. Only `debt-orchestrator` wires concrete implementations together, and `debt-api` depends on it to run the pipeline asynchronously behind 4 REST endpoints, guarded by email access codes stored through `debt-persistence`.
 
 See [`architecture.md`](architecture.md) for the full target architecture, module responsibilities, and contribution guide.
 
@@ -145,7 +146,7 @@ The process exits `0` on success (`COMPLETED`), `1` on pipeline failure (`FAILED
 
 ## Running the REST API
 
-`debt-api` exposes the same pipeline over HTTP. Runs execute asynchronously on a background thread, and their status and reports are read back from PostgreSQL. As a result, the API **refuses to start unless persistence is enabled**.
+`debt-api` exposes the same pipeline over HTTP. Runs execute asynchronously on a background thread, and their status and reports are read back from PostgreSQL. As a result, the API **refuses to start unless persistence is enabled and the database is reachable**. Every pipeline call needs a single-run access code that users request by email (see "Access codes" below).
 
 ### 1. Start PostgreSQL
 
@@ -161,13 +162,21 @@ On top of the LLM variables above, set:
 
 | Variable                   | Description                                       | Default                 |
 | -------------------------- | ------------------------------------------------- | ----------------------- |
-| `DEBT_PERSISTENCE_ENABLED` | Must be `true` for `debt-api` to start            | `false`                 |
 | `DEBT_DB_URL`              | JDBC URL of the database                          | —                       |
 | `DEBT_DB_USERNAME`         | Database user                                     | —                       |
 | `DEBT_DB_PASSWORD`         | Database password (`debt2test` in docker compose) | —                       |
 | `DEBT_DB_POOL_SIZE`        | Connection pool size                              | `5`                     |
 | `DEBT_API_PORT`            | HTTP port                                         | `8080`                  |
 | `DEBT_API_ALLOWED_ORIGIN`  | CORS origin allowed on `/api/**`                  | `http://localhost:5173` |
+| `DEBT_ACCESS_RUN_QUOTA`    | Runs one email can start                          | `3`                     |
+| `DEBT_ACCESS_CODE_TTL`     | Validity of an unused code                        | `72h`                   |
+| `DEBT_ACCESS_RESULTS_TTL`  | How long a used code can read its run             | `30d`                   |
+| `DEBT_ACCESS_REQUEST_COOLDOWN` | Minimum time between codes for one email      | `5m`                    |
+| `DEBT_ACCESS_IP_LIMIT`     | Code requests per IP per hour                     | `10`                    |
+| `DEBT_ACCESS_TERMS_VERSION`| Current terms (`debt-api/src/main/resources/terms/terms-<version>.md`) | `v1` |
+| `DEBT_ACCESS_FRONTEND_URL` | If set, emails link to `<url>/?code=<code>`       | —                       |
+| `DEBT_MAIL_HOST`           | SMTP host; empty = codes are printed to the log (dev) | —                   |
+| `DEBT_MAIL_PORT` / `DEBT_MAIL_USERNAME` / `DEBT_MAIL_PASSWORD` / `DEBT_MAIL_FROM` | SMTP settings (STARTTLS) | `587` / — |
 
 A real environment variable always wins over the value in `.env`.
 
@@ -183,11 +192,25 @@ mvn -pl debt-api spring-boot:run
 
 The API uses the same defaults as the CLI for model paths and output directory. It listens on `DEBT_API_PORT` (default `8080`; `.env.example` sets `8182`). Interactive OpenAPI docs are served at `http://localhost:<port>/swagger-ui.html` and the raw spec at `/v3/api-docs`; they are the full reference for fields, statuses and errors.
 
-### 4. Use the endpoints
+### 4. Get an access code
+
+```bash
+# Read the terms; send back their version
+curl -s http://localhost:8080/api/access/terms
+
+# Ask for a code (always answers 202)
+curl -s -X POST http://localhost:8080/api/access/requests \
+  -H 'Content-Type: application/json' \
+  -d '{"name": "Ana", "email": "ana@example.com", "acceptedTermsVersion": "v1"}'
+```
+
+Without `DEBT_MAIL_HOST`, the email (code included) is printed to the API log. One code starts one run; afterwards it reads, polls and cancels only that run, for 30 days. `GET /api/access/code` with the code shows its state. Send it on every pipeline call as `-H 'Authorization: Bearer <code>'`. A missing, unknown or expired code returns `401`, a code already used to start a run returns `403`, and a run the code did not start returns `404`.
+
+### 5. Use the endpoints
 
 | Method | Path                                      | Result                                                                                             |
 | ------ | ----------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `POST` | `/api/pipeline/runs`                      | `202` with `{ "executionId": ... }`; `400` invalid body or rejected context source; `502` tracker unreachable; `503` DB unavailable |
+| `POST` | `/api/pipeline/runs`                      | `202` with `{ "executionId": ... }`; `400` invalid body or rejected context source; `403` code already used; `502` tracker unreachable; `503` DB unavailable |
 | `GET`  | `/api/pipeline/runs/{executionId}`        | `200` run status and counts; `404` unknown ID                                                      |
 | `GET`  | `/api/pipeline/runs/{executionId}/report` | `200` full per-candidate report; `404` unknown ID; `409` run not finished yet                      |
 | `POST` | `/api/pipeline/runs/{executionId}/cancel` | `202` `{ executionId, outcome }`, best-effort cancel; `404` unknown ID; `409` run already finished |
@@ -205,21 +228,39 @@ Request body for `POST /api/pipeline/runs` (only `repositoryUrl` is required):
 ```bash
 # Start a run
 curl -s -X POST http://localhost:8080/api/pipeline/runs \
+  -H "Authorization: Bearer $CODE" \
   -H 'Content-Type: application/json' \
   -d '{"repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project"}'
 # → {"executionId":"3f2c..."}
 
 # Poll its status until it reaches COMPLETED, COMPLETED_WITH_ERRORS, FAILED, or CANCELLED
-curl -s http://localhost:8080/api/pipeline/runs/<executionId>
+curl -s -H "Authorization: Bearer $CODE" http://localhost:8080/api/pipeline/runs/<executionId>
 
 # Fetch the report once finished
-curl -s http://localhost:8080/api/pipeline/runs/<executionId>/report
+curl -s -H "Authorization: Bearer $CODE" http://localhost:8080/api/pipeline/runs/<executionId>/report
 
 # Cancel a run that is still in progress
-curl -s -X POST http://localhost:8080/api/pipeline/runs/<executionId>/cancel
+curl -s -X POST -H "Authorization: Bearer $CODE" http://localhost:8080/api/pipeline/runs/<executionId>/cancel
 ```
 
 Runs are processed one at a time, in the order they were submitted. Cancellation marks the run `CANCELLED` and interrupts the worker, but stages already in progress may still finish. Report files are still written to the output directory, as with the CLI.
+
+### Operator tasks: quota and data deletion
+
+Give a participant more runs:
+
+```sql
+UPDATE participant SET run_quota_override = 5 WHERE email = 'ana@example.com';
+```
+
+Delete a participant on request (their runs stay, no longer linked to them):
+
+```sql
+BEGIN;
+DELETE FROM access_code WHERE participant_id = (SELECT id FROM participant WHERE email = 'ana@example.com');
+DELETE FROM participant WHERE email = 'ana@example.com';
+COMMIT;
+```
 
 ## Pretrained models
 

@@ -219,18 +219,6 @@ public final class AppOrchestrator {
         return createApplication(options, llmConfig, Optional.empty());
     }
 
-    /**
-     * Builds {@link LlmConfig} internally so callers outside this reactor's
-     * {@code debt-tester}
-     * dependency chain (e.g. {@code debt-api}) never need to import a
-     * feature-module type just to
-     * assemble the application.
-     */
-    public static PipelineApplicationService createApplication(
-            CliOptions options, Optional<PersistenceContext> persistence) {
-        return createApplication(options, new LlmConfig(), persistence);
-    }
-
     public static PipelineApplicationService createApplication(
             CliOptions options, LlmConfig llmConfig, Optional<PersistenceContext> persistence) {
         Objects.requireNonNull(options, "options must not be null");
@@ -245,6 +233,24 @@ public final class AppOrchestrator {
                 .map(PersistenceContext::runStore)
                 .orElse(PipelineRunStore.NO_OP);
 
+        return assemble(options, llmConfig, reportSink, runStore);
+    }
+
+    /**
+     * For a host that already owns the database adapters (e.g. {@code debt-api}, whose Spring context
+     * boots {@code debt-persistence} itself): file reports are always written, plus the given sink.
+     */
+    public static PipelineApplicationService createApplication(
+            CliOptions options, PipelineRunStore runStore, ReportSink databaseSink) {
+        Objects.requireNonNull(options, "options must not be null");
+        Objects.requireNonNull(runStore, "runStore must not be null");
+        Objects.requireNonNull(databaseSink, "databaseSink must not be null");
+        ReportSink reportSink = new CompositeReportSink(new FileReportSink(), List.of(databaseSink));
+        return assemble(options, new LlmConfig(), reportSink, runStore);
+    }
+
+    private static PipelineApplicationService assemble(
+            CliOptions options, LlmConfig llmConfig, ReportSink reportSink, PipelineRunStore runStore) {
         return new PipelineApplicationService(
                 new GitCloneService(),
                 new AstCommentExtractor(),

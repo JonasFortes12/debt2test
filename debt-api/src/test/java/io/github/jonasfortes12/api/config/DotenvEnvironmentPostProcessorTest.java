@@ -24,7 +24,7 @@ class DotenvEnvironmentPostProcessorTest {
     void addsOnlyTheKnownKeysFromDotenv(@TempDir Path directory) throws IOException {
         Files.writeString(directory.resolve(".env"), String.join("\n",
                 "DEBT_API_PORT=9090",
-                "DEBT_PERSISTENCE_ENABLED=true",
+                "DEBT_DB_URL=jdbc:postgresql://localhost:5434/debt2test",
                 "SOME_UNRELATED_VARIABLE=should-not-leak-through",
                 ""), StandardCharsets.UTF_8);
         MockEnvironment environment = new MockEnvironment();
@@ -32,7 +32,7 @@ class DotenvEnvironmentPostProcessorTest {
         DotenvEnvironmentPostProcessor.apply(environment, dotenvIn(directory));
 
         assertEquals("9090", environment.getProperty("DEBT_API_PORT"));
-        assertEquals("true", environment.getProperty("DEBT_PERSISTENCE_ENABLED"));
+        assertEquals("jdbc:postgresql://localhost:5434/debt2test", environment.getProperty("DEBT_DB_URL"));
         assertNull(environment.getProperty("SOME_UNRELATED_VARIABLE"),
                 "only the fixed, known key list may be added -- never an arbitrary .env entry");
     }

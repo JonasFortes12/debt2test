@@ -35,6 +35,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AppOrchestratorTest {
@@ -286,6 +288,42 @@ class AppOrchestratorTest {
                 implementationType(application, "testGenerator"));
         assertEquals(io.github.jonasfortes12.orchestrator.reporting.FileReportSink.class,
                 implementationType(application, "reportSink"));
+    }
+
+    @Test
+    void createApplicationWithPortsBuildsServiceOverTheGivenStores() throws Exception {
+        AppOrchestrator.CliOptions options = AppOrchestrator.parseArguments(new String[0]);
+        io.github.jonasfortes12.core.port.PipelineRunStore runStore =
+                new io.github.jonasfortes12.core.port.PipelineRunStore() { };
+        io.github.jonasfortes12.core.port.ReportSink databaseSink = (result, reportOptions) -> null;
+
+        PipelineApplicationService application = AppOrchestrator.createApplication(options, runStore, databaseSink);
+
+        assertNotNull(application);
+        assertSame(runStore, fieldValue(application, "runStore"));
+        assertEquals(io.github.jonasfortes12.orchestrator.reporting.CompositeReportSink.class,
+                implementationType(application, "reportSink"));
+    }
+
+    @Test
+    void createApplicationWithPortsRejectsNulls() {
+        AppOrchestrator.CliOptions options = AppOrchestrator.parseArguments(new String[0]);
+        io.github.jonasfortes12.core.port.ReportSink databaseSink = (result, reportOptions) -> null;
+
+        NullPointerException missingStore = assertThrows(NullPointerException.class,
+                () -> AppOrchestrator.createApplication(options,
+                        (io.github.jonasfortes12.core.port.PipelineRunStore) null, databaseSink));
+        assertEquals("runStore must not be null", missingStore.getMessage());
+        NullPointerException missingSink = assertThrows(NullPointerException.class,
+                () -> AppOrchestrator.createApplication(options,
+                        io.github.jonasfortes12.core.port.PipelineRunStore.NO_OP, null));
+        assertEquals("databaseSink must not be null", missingSink.getMessage());
+    }
+
+    private static Object fieldValue(PipelineApplicationService application, String fieldName) throws Exception {
+        Field field = PipelineApplicationService.class.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        return field.get(application);
     }
 
     private static Class<?> implementationType(PipelineApplicationService application, String fieldName)
