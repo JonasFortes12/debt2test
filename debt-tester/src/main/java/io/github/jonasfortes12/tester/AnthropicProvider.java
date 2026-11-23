@@ -25,7 +25,8 @@ public class AnthropicProvider implements LlmProvider {
 
         JsonObject payload = new JsonObject();
         payload.addProperty("model", config.getModel());
-        payload.addProperty("max_tokens", 2048);
+        // Thinking tokens count toward max_tokens on models with thinking on (Haiku 5.5 used ~1.2K of 2048).
+        payload.addProperty("max_tokens", 8192);
         payload.addProperty("system", LlmProviderSupport.systemInstruction(prompt));
 
         JsonArray messages = new JsonArray();
@@ -54,15 +55,22 @@ public class AnthropicProvider implements LlmProvider {
 
         try {
             JsonObject jsonResp = LlmProviderSupport.parseResponseObject(response.body());
-            String content = jsonResp.getAsJsonArray("content")
-                    .get(0).getAsJsonObject()
-                    .get("text").getAsString();
-
-            return LlmProviderSupport.extractCodeBlock(content);
+            return LlmProviderSupport.extractCodeBlock(firstText(jsonResp.getAsJsonArray("content")));
         } catch (LlmProviderException failure) {
             throw failure;
         } catch (RuntimeException malformedResponse) {
             throw LlmProviderSupport.malformedResponse();
         }
+    }
+
+    /** Models with thinking on (e.g. Claude Haiku 5.5) put a thinking block before the text block. */
+    private static String firstText(JsonArray content) {
+        for (var block : content) {
+            JsonObject object = block.getAsJsonObject();
+            if (object.has("text")) {
+                return object.get("text").getAsString();
+            }
+        }
+        throw new IllegalStateException("response has no text block");
     }
 }

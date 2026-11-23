@@ -1,316 +1,338 @@
-{
-  "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
-  "status": "COMPLETED_WITH_ERRORS",
-  "errors": [
-    {
-      "stage": "extraction",
-      "code": "JAVA_PARSE_FAILED",
-      "candidateId": null,
-      "recoverable": true,
-      "message": "pipeline error recorded"
+[
+  {
+    "filePath": "src/main/java/io/github/jonasfortes12/samples/debt/auth/LoginService.java",
+    "methodName": "authenticate",
+    "lineNumber": 9,
+    "comment": "* TODO DEBT2TEST-1: refactor this; legacy MD5 hashing is an ugly workaround and\n     * password hashing should be redesigned around bcrypt (workFactor\u003d12) or Argon2.",
+    "methodSourceCode": "/**\n * TODO DEBT2TEST-1: refactor this; legacy MD5 hashing is an ugly workaround and\n * password hashing should be redesigned around bcrypt (workFactor\u003d12) or Argon2.\n */\npublic boolean authenticate(String username, String password) {\n    if (username \u003d\u003d null || username.isEmpty()) {\n        return false;\n    }\n    String passwordHash \u003d legacyMd5Hash(password);\n    return validateHash(username, passwordHash);\n}",
+    "isSatd": true,
+    "debtType": "DESIGN",
+    "confidence": 0.4,
+    "generatedTestCode": "import org.junit.jupiter.api.BeforeEach;\nimport org.junit.jupiter.api.Disabled;\nimport org.junit.jupiter.api.DisplayName;\nimport org.junit.jupiter.api.Nested;\nimport org.junit.jupiter.api.Test;\nimport org.junit.jupiter.params.ParameterizedTest;\nimport org.junit.jupiter.params.provider.NullAndEmptySource;\nimport org.junit.jupiter.params.provider.ValueSource;\n\nimport java.nio.charset.StandardCharsets;\nimport java.security.MessageDigest;\nimport java.security.NoSuchAlgorithmException;\nimport java.util.ArrayList;\nimport java.util.List;\n\nimport static org.junit.jupiter.api.Assertions.*;\n\n/**\n * Tests for LoginService.authenticate() covering the legacy MD5 path (DEBT2TEST-1).\n *\n * Assumptions about the production class (not shown in the method source):\n *   - LoginService has a no-arg constructor.\n *   - validateHash(String username, String passwordHash) is non-private (protected or\n *     package-private) so a test double can observe and control it.\n *   - legacyMd5Hash(String) produces a lowercase hex MD5 digest of the UTF-8 password.\n *\n * Adjust the test double if these assumptions do not hold.\n */\nclass LoginServiceAuthenticateTest {\n\n    /**\n     * Test double that records validateHash() invocations and returns a configurable result,\n     * isolating authenticate() from any real credential store.\n     */\n    static class RecordingLoginService extends LoginService {\n        final List\u003cString[]\u003e validateCalls \u003d new ArrayList\u003c\u003e();\n        boolean validateResult \u003d false;\n\n        @Override\n        protected boolean validateHash(String username, String passwordHash) {\n            validateCalls.add(new String[] {username, passwordHash});\n            return validateResult;\n        }\n    }\n\n    private RecordingLoginService service;\n\n    @BeforeEach\n    void setUp() {\n        service \u003d new RecordingLoginService();\n    }\n\n    private static String md5Hex(String input) {\n        try {\n            MessageDigest md \u003d MessageDigest.getInstance(\"MD5\");\n            byte[] digest \u003d md.digest(input.getBytes(StandardCharsets.UTF_8));\n            StringBuilder sb \u003d new StringBuilder();\n            for (byte b : digest) {\n                sb.append(String.format(\"%02x\", b));\n            }\n            return sb.toString();\n        } catch (NoSuchAlgorithmException e) {\n            throw new IllegalStateException(\"MD5 not available\", e);\n        }\n    }\n\n    @Nested\n    @DisplayName(\"Invalid username handling\")\n    class InvalidUsername {\n\n        @ParameterizedTest(name \u003d \"returns false for username [{0}] without validating\")\n        @NullAndEmptySource\n        void rejectsNullOrEmptyUsername(String username) {\n            boolean result \u003d service.authenticate(username, \"password\");\n\n            assertFalse(result);\n            assertTrue(service.validateCalls.isEmpty(),\n                    \"validateHash must not be consulted for an invalid username\");\n        }\n\n        @Test\n        @DisplayName(\"rejects invalid username even when validator would accept\")\n        void rejectsEvenIfValidatorWouldAccept() {\n            service.validateResult \u003d true;\n\n            assertFalse(service.authenticate(\"\", \"password\"));\n            assertFalse(service.authenticate(null, \"password\"));\n        }\n    }\n\n    @Nested\n    @DisplayName(\"Legacy MD5 hashing path\")\n    class LegacyMd5Path {\n\n        @Test\n        @DisplayName(\"hashes password with MD5 before delegating to validateHash\")\n        void passesMd5HashToValidator() {\n            service.authenticate(\"alice\", \"password\");\n\n            assertEquals(1, service.validateCalls.size());\n            String[] call \u003d service.validateCalls.get(0);\n            assertEquals(\"alice\", call[0]);\n            assertEquals(\"5f4dcc3b5aa765d61d8327deb882cf99\", call[1]);\n            assertEquals(md5Hex(\"password\"), call[1]);\n        }\n\n        @Test\n        @DisplayName(\"hash is deterministic for the same password\")\n        void hashIsDeterministic() {\n            service.authenticate(\"alice\", \"s3cret!\");\n            service.authenticate(\"alice\", \"s3cret!\");\n\n            assertEquals(2, service.validateCalls.size());\n            assertEquals(service.validateCalls.get(0)[1], service.validateCalls.get(1)[1]);\n        }\n\n        @ParameterizedTest(name \u003d \"password [{0}] produces matching MD5 digest\")\n        @ValueSource(strings \u003d {\"a\", \"password\", \"P@ssw0rd!\", \"пароль\", \"  spaced  \"})\n        void hashMatchesReferenceMd5(String password) {\n            service.authenticate(\"bob\", password);\n\n            assertEquals(md5Hex(password), service.validateCalls.get(0)[1]);\n        }\n\n        @Test\n        @DisplayName(\"different passwords produce different hashes\")\n        void differentPasswordsDifferentHashes() {\n            service.authenticate(\"alice\", \"password1\");\n            service.authenticate(\"alice\", \"password2\");\n\n            assertNotEquals(service.validateCalls.get(0)[1], service.validateCalls.get(1)[1]);\n        }\n    }\n\n    @Nested\n    @DisplayName(\"Result propagation\")\n    class ResultPropagation {\n\n        @Test\n        @DisplayName(\"returns true when validator accepts the hash\")\n        void returnsTrueWhenValidatorAccepts() {\n            service.validateResult \u003d true;\n\n            assertTrue(service.authenticate(\"alice\", \"password\"));\n        }\n\n        @Test\n        @DisplayName(\"returns false when validator rejects the hash\")\n        void returnsFalseWhenValidatorRejects() {\n            service.validateResult \u003d false;\n\n            assertFalse(service.authenticate(\"alice\", \"wrong\"));\n        }\n\n        @Test\n        @DisplayName(\"validator receives the exact username supplied\")\n        void forwardsUsername() {\n            service.authenticate(\"Alice.Smith\", \"password\");\n\n            assertEquals(\"Alice.Smith\", service.validateCalls.get(0)[0]);\n        }\n    }\n\n    @Nested\n    @DisplayName(\"Target state: bcrypt/Argon2 migration (DEBT2TEST-1)\")\n    class BcryptMigrationTarget {\n\n        @Test\n        @Disabled(\"Pending migration: replace legacyMd5Hash with bcrypt (workFactor\u003d12) or Argon2\")\n        @DisplayName(\"stored hash is not a raw MD5 digest after migration\")\n        void storedHashIsNotMd5() {\n            service.validateResult \u003d true;\n\n            service.authenticate(\"alice\", \"password\");\n\n            String submitted \u003d service.validateCalls.get(0)[1];\n            assertNotEquals(md5Hex(\"password\"), submitted,\n                    \"After migration, the validator should receive a bcrypt/Argon2 comparison, not MD5\");\n        }\n\n        @Test\n        @Disabled(\"Pending migration: legacy MD5 hashes must be re-hashed on successful login\")\n        @DisplayName(\"successful login with legacy MD5 hash triggers re-hash to bcrypt\")\n        void successfulLegacyLoginRehashes() {\n            // Expected future behavior: after a successful authenticate() using a legacy MD5\n            // record, the stored credential is upgraded to bcrypt(workFactor\u003d12).\n            // Implement once the credential store and bcrypt dependency are available.\n            service.validateResult \u003d true;\n\n            assertTrue(service.authenticate(\"alice\", \"password\"));\n            // TODO: verify credential store now contains a bcrypt hash with cost factor 12.\n        }\n    }\n}",
+    "status": "GENERATED",
+    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/main/java/io/github/jonasfortes12/samples/debt/auth/LoginService.java:9:5:authenticate:LoginService:authenticate(String, String)",
+    "contextStatus": "MATCHED",
+    "issueReferences": [
+      {
+        "value": "DEBT2TEST-1",
+        "source": "comment"
+      }
+    ],
+    "externalTask": {
+      "provider": "jira",
+      "key": "DEBT2TEST-1",
+      "summary": "Migrate MD5 to bcrypt",
+      "description": "Authentication currently hashes passwords with MD5, which is cryptographically broken and unsuitable for password storage.\n\n*Debt context (SATD):* {{LoginService.authenticate()}} — comment flags this as legacy code from 2015 with ~15% performance overhead on login attempts.\n\n*Acceptance Criteria:*\n\n* Replace {{legacyMd5Hash}} with bcrypt (workFactor\u003d12) or Argon2.\n* Existing stored hashes are migrated or re-hashed on next successful login.\n* Unit tests cover authentication with the new hashing scheme.",
+      "acceptanceCriteria": [],
+      "labels": [],
+      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-1"
     },
-    {
-      "stage": "classification",
-      "code": "CLASSIFIER_MODEL_FALLBACK",
-      "candidateId": null,
-      "recoverable": true,
-      "message": "pipeline error recorded"
-    }
-  ],
-  "items": [
-    {
-      "filePath": "src/main/java/io/github/jonasfortes12/samples/debt/auth/LoginService.java",
-      "methodName": "authenticate",
-      "lineNumber": 14,
-      "comment": "* TODO: DEBT2TEST-1\n     * This authentication mechanism uses MD5 hashing which is deprecated.\n     * MD5 is cryptographically broken and should not be used for password hashing.\n     * Migration target: bcrypt with workFactor\u003d12 or Argon2.\n     *\n     * Legacy code from 2015. Performance impact: ~15% slower on login attempts.\n     * Blocks user experience improvements until resolved.",
-      "methodSourceCode": "/**\n * TODO: DEBT2TEST-1\n * This authentication mechanism uses MD5 hashing which is deprecated.\n * MD5 is cryptographically broken and should not be used for password hashing.\n * Migration target: bcrypt with workFactor\u003d12 or Argon2.\n *\n * Legacy code from 2015. Performance impact: ~15% slower on login attempts.\n * Blocks user experience improvements until resolved.\n */\npublic boolean authenticate(String username, String password) {\n    if (username \u003d\u003d null || username.isEmpty()) {\n        return false;\n    }\n    String passwordHash \u003d legacyMd5Hash(password);\n    return validateHash(username, passwordHash);\n}",
-      "isSatd": true,
-      "debtType": "TEST",
-      "confidence": null,
-      "generatedTestCode": "import org.junit.jupiter.api.BeforeEach;\nimport org.junit.jupiter.api.DisplayName;\nimport org.junit.jupiter.api.Test;\nimport org.mockito.Mockito;\n\nimport static org.junit.jupiter.api.Assertions.*;\nimport static org.mockito.ArgumentMatchers.anyString;\nimport static org.mockito.Mockito.when;\n\nclass LoginServiceTest {\n\n    private LoginService loginService;\n\n    @BeforeEach\n    void setUp() {\n        // Assuming LoginService can be mocked or has dependencies we can control.\n        // If legacyMd5Hash or validateHash are private/protected or part of the class,\n        // we test the public authenticate contract as requested by the test debt.\n        loginService \u003d Mockito.spy(new LoginService());\n    }\n\n    @Test\n    @DisplayName(\"Should return true when username and password are valid\")\n    void shouldAuthenticateSuccessfullyWithValidCredentials() {\n        // Arrange\n        String username \u003d \"validUser\";\n        String password \u003d \"securePassword123\";\n\n        // Stubbing the internal validation method if needed, or relying on actual implementation\n        // Here we test the behavior of the authenticate method as defined in the source\n        doReturn(true).when(loginService).validateHash(eq(username), anyString());\n\n        // Act\n        boolean result \u003d loginService.authenticate(username, password);\n\n        // Assert\n        assertTrue(result, \"Authentication should succeed for valid credentials\");\n    }\n\n    @Test\n    @DisplayName(\"Should return false when username is null or empty\")\n    void shouldFailAuthenticationWhenUsernameIsNullOrEmpty() {\n        // Act \u0026 Assert\n        assertFalse(loginService.authenticate(null, \"password123\"), \"Should fail for null username\");\n        assertFalse(loginService.authenticate(\"\", \"password123\"), \"Should fail for empty username\");\n    }\n\n    @Test\n    @DisplayName(\"Should return false when password validation fails\")\n    void shouldFailAuthenticationWhenPasswordIsInvalid() {\n        // Arrange\n        String username \u003d \"validUser\";\n        String password \u003d \"wrongPassword\";\n\n        doReturn(false).when(loginService).validateHash(eq(username), anyString());\n\n        // Act\n        boolean result \u003d loginService.authenticate(username, password);\n\n        // Assert\n        assertFalse(result, \"Authentication should fail for invalid password\");\n    }\n}",
-      "status": "GENERATED",
-      "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/main/java/io/github/jonasfortes12/samples/debt/auth/LoginService.java:14:5:authenticate:LoginService:authenticate(String, String)",
-      "contextStatus": "MATCHED",
-      "issueReferences": [
-        {
-          "value": "DEBT2TEST-1",
-          "source": "comment"
-        }
-      ],
-      "externalTask": {
-        "provider": "jira",
-        "key": "DEBT2TEST-1",
-        "summary": "Migrate MD5 to bcrypt",
-        "description": "Authentication currently hashes passwords with MD5, which is cryptographically broken and unsuitable for password storage.\n\n*Debt context (SATD):* {{LoginService.authenticate()}} — comment flags this as legacy code from 2015 with ~15% performance overhead on login attempts.\n\n*Acceptance Criteria:*\n\n* Replace {{legacyMd5Hash}} with bcrypt (workFactor\u003d12) or Argon2.\n* Existing stored hashes are migrated or re-hashed on next successful login.\n* Unit tests cover authentication with the new hashing scheme.",
-        "acceptanceCriteria": [],
-        "labels": [],
-        "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-1"
-      },
-      "classificationProvenance": {
-        "provider": "DebtHunter",
-        "strategy": "heuristic-fallback",
-        "version": "unavailable"
-      },
-      "errors": [],
-      "provider": "gemini",
-      "model": "gemini-3.5-flash-lite",
-      "promptVersion": "v1",
-      "validationStatus": "NOT_RUN",
-      "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
-      "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-      "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
+    "classificationProvenance": {
+      "provider": "DebtHunter",
+      "strategy": "model",
+      "version": "configured"
     },
-    {
-      "filePath": "src/main/java/io/github/jonasfortes12/samples/debt/database/OrderRepository.java",
-      "methodName": "findOrdersForCustomers",
-      "lineNumber": 15,
-      "comment": "TODO: DEBT2TEST-7\nWritten for a single-customer admin screen; issues one simulated query\nper customer ID. Never revisited when the bulk \"customer orders export\"\nfeature reused this method, where it now fires hundreds of queries\nper export (N+1). Should be a single batched IN (...) query.",
-      "methodSourceCode": "// TODO: DEBT2TEST-7\n// Written for a single-customer admin screen; issues one simulated query\n// per customer ID. Never revisited when the bulk \"customer orders export\"\n// feature reused this method, where it now fires hundreds of queries\n// per export (N+1). Should be a single batched IN (...) query.\npublic List\u003cString\u003e findOrdersForCustomers(List\u003cString\u003e customerIds) {\n    List\u003cString\u003e orders \u003d new ArrayList\u003c\u003e();\n    for (String customerId : customerIds) {\n        orders.addAll(findOrdersByCustomer(customerId));\n    }\n    return orders;\n}",
-      "isSatd": true,
-      "debtType": "TEST",
-      "confidence": null,
-      "generatedTestCode": "import org.junit.jupiter.api.Test;\nimport java.util.Arrays;\nimport java.util.Collections;\nimport java.util.List;\nimport java.util.ArrayList;\n\nimport static org.junit.jupiter.api.Assertions.*;\n\nclass OrderRepositoryTest {\n\n    // Subclass or test double to monitor query execution counts and ensure batched behavior\n    private static class TestableOrderRepository {\n        private int queryCount \u003d 0;\n\n        public int getQueryCount() {\n            return queryCount;\n        }\n\n        // Refactored method implementing a single batched query instead of N+1 loops\n        public List\u003cString\u003e findOrdersForCustomers(List\u003cString\u003e customerIds) {\n            if (customerIds \u003d\u003d null || customerIds.isEmpty()) {\n                return Collections.emptyList();\n            }\n            \n            // Increment query count once for the batched operation (e.g., WHERE customer_id IN (...))\n            queryCount++;\n            \n            List\u003cString\u003e orders \u003d new ArrayList\u003c\u003e();\n            for (String customerId : customerIds) {\n                // Simulate fetching orders for the customer in the batch\n                orders.add(\"Order-For-\" + customerId);\n            }\n            return orders;\n        }\n    }\n\n    @Test\n    void testFindOrdersForCustomersIssuesSingleBatchedQuery() {\n        TestableOrderRepository repository \u003d new TestableOrderRepository();\n        \n        List\u003cString\u003e customerIds \u003d Arrays.asList(\"cust-1\", \"cust-2\", \"cust-3\", \"cust-4\", \"cust-5\");\n\n        List\u003cString\u003e orders \u003d repository.findOrdersForCustomers(customerIds);\n\n        // Verify that exactly ONE query was executed regardless of the number of customer IDs (batched IN clause)\n        assertEquals(1, repository.getQueryCount(), \"Repository should execute exactly 1 batched query to prevent N+1 issues.\");\n        \n        // Verify correctness of returned orders\n        assertEquals(5, orders.size());\n        assertTrue(orders.contains(\"Order-For-cust-1\"));\n        assertTrue(orders.contains(\"Order-For-cust-5\"));\n    }\n\n    @Test\n    void testFindOrdersForEmptyCustomerList() {\n        TestableOrderRepository repository \u003d new TestableOrderRepository();\n\n        List\u003cString\u003e orders \u003d repository.findOrdersForCustomers(Collections.emptyList());\n\n        // Verify query count is 0 or 1 depending on implementation, but here 0 is safe for empty lists\n        assertEquals(0, repository.getQueryCount());\n        assertTrue(orders.isEmpty());\n    }\n}",
-      "status": "GENERATED",
-      "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/main/java/io/github/jonasfortes12/samples/debt/database/OrderRepository.java:15:5:findOrdersForCustomers:OrderRepository:findOrdersForCustomers(List)",
-      "contextStatus": "MATCHED",
-      "issueReferences": [
-        {
-          "value": "DEBT2TEST-7",
-          "source": "comment"
-        }
-      ],
-      "externalTask": {
-        "provider": "jira",
-        "key": "DEBT2TEST-7",
-        "summary": "Batch OrderRepository customer lookups to remove N+1 queries",
-        "description": "OrderRepository.findOrdersForCustomers() loops over customer IDs and issues one simulated query per customer instead of a single batched lookup, causing an N+1 query pattern.\n\nDebt context (SATD): OrderRepository — TODO comment notes this was written for a single-customer admin screen and was never revisited when the bulk \"customer orders export\" feature reused it, where it now issues hundreds of queries per export.\n\nAcceptance Criteria:\n\n* Replace the per-ID loop with a single batched query (e.g., WHERE customer_id IN (...)).\n* findOrdersForCustomers() issues one query regardless of input size.\n* Test covers a multi-customer call and asserts the query/call count.",
-        "acceptanceCriteria": [],
-        "labels": [],
-        "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-7"
-      },
-      "classificationProvenance": {
-        "provider": "DebtHunter",
-        "strategy": "heuristic-fallback",
-        "version": "unavailable"
-      },
-      "errors": [],
-      "provider": "gemini",
-      "model": "gemini-3.5-flash-lite",
-      "promptVersion": "v1",
-      "validationStatus": "NOT_RUN",
-      "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
-      "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-      "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
+    "errors": [],
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "promptVersion": "v1",
+    "validationStatus": "NOT_RUN",
+    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
+    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
+    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
+  },
+  {
+    "filePath": "src/main/java/io/github/jonasfortes12/samples/debt/database/OrderRepository.java",
+    "methodName": "findOrdersForCustomers",
+    "lineNumber": 12,
+    "comment": "TODO DEBT2TEST-7: refactor this; one query per customer is an ugly workaround (N+1)\nand should be redesigned as a single batched IN (...) query.",
+    "methodSourceCode": "// TODO DEBT2TEST-7: refactor this; one query per customer is an ugly workaround (N+1)\n// and should be redesigned as a single batched IN (...) query.\npublic List\u003cString\u003e findOrdersForCustomers(List\u003cString\u003e customerIds) {\n    List\u003cString\u003e orders \u003d new ArrayList\u003c\u003e();\n    for (String customerId : customerIds) {\n        orders.addAll(findOrdersByCustomer(customerId));\n    }\n    return orders;\n}",
+    "isSatd": true,
+    "debtType": "DESIGN",
+    "confidence": 0.4,
+    "generatedTestCode": "import org.junit.jupiter.api.BeforeEach;\nimport org.junit.jupiter.api.DisplayName;\nimport org.junit.jupiter.api.Test;\nimport org.junit.jupiter.params.ParameterizedTest;\nimport org.junit.jupiter.params.provider.ValueSource;\n\nimport java.util.ArrayList;\nimport java.util.HashMap;\nimport java.util.List;\nimport java.util.Map;\n\nimport static org.junit.jupiter.api.Assertions.assertEquals;\nimport static org.junit.jupiter.api.Assertions.assertFalse;\nimport static org.junit.jupiter.api.Assertions.assertTrue;\n\n/**\n * Tests for DEBT2TEST-7: OrderRepository.findOrdersForCustomers() must issue a single\n * batched query (WHERE customer_id IN (...)) instead of one query per customer (N+1).\n *\n * Assumed seam: OrderRepository is constructed with a QueryExecutor that receives the\n * SQL text and bound parameters and returns result rows. Every query issued by the\n * repository goes through QueryExecutor.execute(...), so its invocation count is the\n * query count.\n */\nclass OrderRepositoryBatchedQueryTest {\n\n    /** Minimal query executor interface assumed by the repository under test. */\n    interface QueryExecutor {\n        List\u003cString\u003e execute(String sql, List\u003cString\u003e params);\n    }\n\n    /**\n     * Fake executor that records every query and simulates an IN (...) lookup\n     * over an in-memory order table keyed by customer ID.\n     */\n    static class RecordingQueryExecutor implements QueryExecutor {\n        final Map\u003cString, List\u003cString\u003e\u003e ordersByCustomer \u003d new HashMap\u003c\u003e();\n        final List\u003cString\u003e executedSql \u003d new ArrayList\u003c\u003e();\n        final List\u003cList\u003cString\u003e\u003e executedParams \u003d new ArrayList\u003c\u003e();\n\n        @Override\n        public List\u003cString\u003e execute(String sql, List\u003cString\u003e params) {\n            executedSql.add(sql);\n            executedParams.add(new ArrayList\u003c\u003e(params));\n\n            List\u003cString\u003e rows \u003d new ArrayList\u003c\u003e();\n            for (String customerId : params) {\n                rows.addAll(ordersByCustomer.getOrDefault(customerId, List.of()));\n            }\n            return rows;\n        }\n\n        int queryCount() {\n            return executedSql.size();\n        }\n    }\n\n    private RecordingQueryExecutor executor;\n    private OrderRepository repository;\n\n    @BeforeEach\n    void setUp() {\n        executor \u003d new RecordingQueryExecutor();\n        repository \u003d new OrderRepository(executor);\n    }\n\n    private static List\u003cString\u003e customerIds(int count) {\n        List\u003cString\u003e ids \u003d new ArrayList\u003c\u003e();\n        for (int i \u003d 1; i \u003c\u003d count; i++) {\n            ids.add(\"cust-\" + i);\n        }\n        return ids;\n    }\n\n    private void seedOrders(List\u003cString\u003e ids, int ordersPerCustomer) {\n        for (String id : ids) {\n            List\u003cString\u003e orders \u003d new ArrayList\u003c\u003e();\n            for (int j \u003d 1; j \u003c\u003d ordersPerCustomer; j++) {\n                orders.add(\"order-\" + id + \"-\" + j);\n            }\n            executor.ordersByCustomer.put(id, orders);\n        }\n    }\n\n    @Test\n    @DisplayName(\"Multi-customer call issues exactly one batched query\")\n    void multiCustomerCallIssuesSingleQuery() {\n        List\u003cString\u003e ids \u003d customerIds(5);\n        seedOrders(ids, 2);\n\n        List\u003cString\u003e result \u003d repository.findOrdersForCustomers(ids);\n\n        assertEquals(1, executor.queryCount(),\n                \"findOrdersForCustomers must issue one query regardless of customer count\");\n    }\n\n    @Test\n    @DisplayName(\"Batched query uses an IN (...) clause with all customer IDs as parameters\")\n    void batchedQueryUsesInClauseWithAllIds() {\n        List\u003cString\u003e ids \u003d customerIds(4);\n        seedOrders(ids, 1);\n\n        repository.findOrdersForCustomers(ids);\n\n        assertEquals(1, executor.queryCount());\n        String sql \u003d executor.executedSql.get(0).toUpperCase();\n        assertTrue(sql.contains(\"IN (\"), \"Expected a batched IN (...) clause, got: \" + sql);\n        assertEquals(ids, executor.executedParams.get(0),\n                \"All customer IDs should be bound in the single batched query\");\n    }\n\n    @Test\n    @DisplayName(\"Multi-customer call returns all orders for all customers\")\n    void multiCustomerCallReturnsAllOrders() {\n        List\u003cString\u003e ids \u003d customerIds(3);\n        seedOrders(ids, 2);\n\n        List\u003cString\u003e result \u003d repository.findOrdersForCustomers(ids);\n\n        assertEquals(6, result.size());\n        for (String id : ids) {\n            assertTrue(result.contains(\"order-\" + id + \"-1\"));\n            assertTrue(result.contains(\"order-\" + id + \"-2\"));\n        }\n    }\n\n    @ParameterizedTest(name \u003d \"query count stays at 1 for {0} customers\")\n    @ValueSource(ints \u003d {1, 2, 10, 100, 500})\n    @DisplayName(\"Query count is constant with respect to input size\")\n    void queryCountIndependentOfInputSize(int customerCount) {\n        List\u003cString\u003e ids \u003d customerIds(customerCount);\n        seedOrders(ids, 1);\n\n        List\u003cString\u003e result \u003d repository.findOrdersForCustomers(ids);\n\n        assertEquals(1, executor.queryCount(),\n                \"Query count must not scale with the number of customers\");\n        assertEquals(customerCount, result.size());\n    }\n\n    @Test\n    @DisplayName(\"Customers without orders contribute nothing but do not add queries\")\n    void customersWithoutOrdersAddNoResultsOrQueries() {\n        List\u003cString\u003e ids \u003d customerIds(4);\n        // Only the first customer has orders\n        executor.ordersByCustomer.put(ids.get(0), List.of(\"order-only-1\", \"order-only-2\"));\n\n        List\u003cString\u003e result \u003d repository.findOrdersForCustomers(ids);\n\n        assertEquals(1, executor.queryCount());\n        assertEquals(2, result.size());\n        assertTrue(result.contains(\"order-only-1\"));\n        assertTrue(result.contains(\"order-only-2\"));\n    }\n\n    @Test\n    @DisplayName(\"Empty customer list returns no orders without issuing per-customer queries\")\n    void emptyInputReturnsEmptyWithoutPerCustomerQueries() {\n        List\u003cString\u003e result \u003d repository.findOrdersForCustomers(List.of());\n\n        assertTrue(result.isEmpty());\n        assertFalse(executor.queryCount() \u003e 1,\n                \"Empty input must not issue more than one query\");\n    }\n}",
+    "status": "GENERATED",
+    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/main/java/io/github/jonasfortes12/samples/debt/database/OrderRepository.java:12:5:findOrdersForCustomers:OrderRepository:findOrdersForCustomers(List)",
+    "contextStatus": "MATCHED",
+    "issueReferences": [
+      {
+        "value": "DEBT2TEST-7",
+        "source": "comment"
+      }
+    ],
+    "externalTask": {
+      "provider": "jira",
+      "key": "DEBT2TEST-7",
+      "summary": "Batch OrderRepository customer lookups to remove N+1 queries",
+      "description": "OrderRepository.findOrdersForCustomers() loops over customer IDs and issues one simulated query per customer instead of a single batched lookup, causing an N+1 query pattern.\n\nDebt context (SATD): OrderRepository — TODO comment notes this was written for a single-customer admin screen and was never revisited when the bulk \"customer orders export\" feature reused it, where it now issues hundreds of queries per export.\n\nAcceptance Criteria:\n\n* Replace the per-ID loop with a single batched query (e.g., WHERE customer_id IN (...)).\n* findOrdersForCustomers() issues one query regardless of input size.\n* Test covers a multi-customer call and asserts the query/call count.",
+      "acceptanceCriteria": [],
+      "labels": [],
+      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-7"
     },
-    {
-      "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/cache/CacheManagerTest.java",
-      "methodName": "shouldReportCorrectSize",
-      "lineNumber": 36,
-      "comment": "DEBT2TEST-4: no test covers eviction under memory pressure because the\ncache has no eviction policy or maxSize limit yet.",
-      "methodSourceCode": "// DEBT2TEST-4: no test covers eviction under memory pressure because the\n// cache has no eviction policy or maxSize limit yet.\n@Test\nvoid shouldReportCorrectSize() {\n    cacheManager.put(\"a\", 1);\n    cacheManager.put(\"b\", 2);\n    assertEquals(2, cacheManager.size());\n}",
-      "isSatd": true,
-      "debtType": "TEST",
-      "confidence": null,
-      "generatedTestCode": "import org.junit.jupiter.api.BeforeEach;\nimport org.junit.jupiter.api.Test;\n\nimport static org.junit.jupiter.api.Assertions.*;\n\nclass CacheManagerTest {\n\n    private CacheManager cacheManager;\n\n    @BeforeEach\n    void setUp() {\n        // Assuming CacheManager has a constructor or configuration to set maxSize.\n        // Adjust instantiation according to the actual implementation details.\n        cacheManager \u003d new CacheManager(2);\n    }\n\n    @Test\n    void shouldReportCorrectSize() {\n        cacheManager.put(\"a\", 1);\n        cacheManager.put(\"b\", 2);\n        assertEquals(2, cacheManager.size());\n    }\n\n    @Test\n    void shouldEvictOldestEntryWhenMaxSizeExceeded() {\n        // Given a cache with maxSize \u003d 2\n        cacheManager.put(\"a\", 1);\n        cacheManager.put(\"b\", 2);\n        assertEquals(2, cacheManager.size());\n\n        // When adding a third element, exceeding the maxSize\n        cacheManager.put(\"c\", 3);\n\n        // Then the size should remain at maxSize (2)\n        assertEquals(2, cacheManager.size());\n\n        // And the least recently used element (\"a\") should be evicted, \n        // while recently accessed or newer elements (\"b\" and \"c\") remain.\n        assertNull(cacheManager.get(\"a\"), \"Evicted item \u0027a\u0027 should no longer be in the cache\");\n        assertEquals(2, cacheManager.get(\"b\"));\n        assertEquals(3, cacheManager.get(\"c\"));\n    }\n}",
-      "status": "GENERATED",
-      "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/cache/CacheManagerTest.java:36:5:shouldReportCorrectSize:CacheManagerTest:shouldReportCorrectSize()",
-      "contextStatus": "MATCHED",
-      "issueReferences": [
-        {
-          "value": "DEBT2TEST-4",
-          "source": "comment"
-        }
-      ],
-      "externalTask": {
-        "provider": "jira",
-        "key": "DEBT2TEST-4",
-        "summary": "Implement bounded LRU cache",
-        "description": "{{CacheManager}} uses an unbounded {{HashMap}} with no eviction policy, risking {{OutOfMemoryError}} in production. Reported by DevOps after an incident on 2024-01-15.\n\n*Debt context (SATD):* {{CacheManager}} — TODO comment calls for an LRU cache with a max size limit.\n\n*Acceptance Criteria:*\n\n* Replace the unbounded {{HashMap}} with a bounded LRU cache (e.g., {{LinkedHashMap}} in access-order mode, or a dedicated LRU structure).\n* Cache exposes a configurable {{maxSize}}.\n* Unit tests confirm eviction occurs once {{maxSize}} is exceeded.",
-        "acceptanceCriteria": [],
-        "labels": [],
-        "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-4"
-      },
-      "classificationProvenance": {
-        "provider": "DebtHunter",
-        "strategy": "heuristic-fallback",
-        "version": "unavailable"
-      },
-      "errors": [],
-      "provider": "gemini",
-      "model": "gemini-3.5-flash-lite",
-      "promptVersion": "v1",
-      "validationStatus": "NOT_RUN",
-      "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
-      "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-      "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
+    "classificationProvenance": {
+      "provider": "DebtHunter",
+      "strategy": "model",
+      "version": "configured"
     },
-    {
-      "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/database/ConnectionPoolTest.java",
-      "methodName": "shouldNotExceedPoolSizeOnRelease",
-      "lineNumber": 32,
-      "comment": "DEBT2TEST-3: concurrent access isn\u0027t exercised here because the pool\nlacks synchronization; a true concurrency test would be flaky by design.",
-      "methodSourceCode": "// DEBT2TEST-3: concurrent access isn\u0027t exercised here because the pool\n// lacks synchronization; a true concurrency test would be flaky by design.\n@Test\nvoid shouldNotExceedPoolSizeOnRelease() throws InterruptedException {\n    ConnectionPool.DbConnection conn \u003d connectionPool.getConnection();\n    connectionPool.releaseConnection(conn);\n    connectionPool.releaseConnection(conn);\n    assertTrue(true);\n}",
-      "isSatd": true,
-      "debtType": "TEST",
-      "confidence": null,
-      "generatedTestCode": "import org.junit.jupiter.api.BeforeEach;\nimport org.junit.jupiter.api.Test;\n\nimport java.util.HashSet;\nimport java.util.Set;\nimport java.util.concurrent.*;\n\nimport static org.junit.jupiter.api.Assertions.*;\n\nclass ConnectionPoolTest {\n\n    private ConnectionPool connectionPool;\n    private static final int INITIAL_POOL_SIZE \u003d 5;\n\n    @BeforeEach\n    void setUp() {\n        connectionPool \u003d new ConnectionPool(INITIAL_POOL_SIZE);\n    }\n\n    @Test\n    void shouldNotExceedPoolSizeOnRelease() {\n        ConnectionPool.DbConnection conn \u003d connectionPool.getConnection();\n        connectionPool.releaseConnection(conn);\n        // Attempting to release the same connection twice should not increase the available pool size beyond its capacity\n        connectionPool.releaseConnection(conn);\n        \n        // Verify by acquiring all connections up to the initial pool size\n        for (int i \u003d 0; i \u003c INITIAL_POOL_SIZE; i++) {\n            assertNotNull(connectionPool.getConnection());\n        }\n        \n        // The pool should now be exhausted, and the next call should either block or return null/throw depending on implementation\n        // Here we ensure we didn\u0027t duplicate the released connection causing excess capacity.\n    }\n\n    @Test\n    void shouldHandleConcurrentAccessWithoutDuplicateLeasesOrLoss() throws InterruptedException {\n        int threadCount \u003d 50;\n        int iterationsPerThread \u003d 100;\n        ExecutorService executorService \u003d Executors.newFixedThreadPool(threadCount);\n        CountDownLatch latch \u003d new CountDownLatch(threadCount);\n\n        // Keep track of all leased connections to ensure no duplicates are issued concurrently\n        ConcurrentHashMap\u003cConnectionPool.DbConnection, Boolean\u003e activeConnections \u003d new ConcurrentHashMap\u003c\u003e();\n\n        for (int i \u003d 0; i \u003c threadCount; i++) {\n            executorService.submit(() -\u003e {\n                try {\n                    for (int j \u003d 0; j \u003c iterationsPerThread; j++) {\n                        ConnectionPool.DbConnection conn \u003d connectionPool.getConnection();\n                        assertNotNull(conn, \"Connection should not be null\");\n                        \n                        // Ensure the connection was not already checked out by another thread\n                        boolean isNew \u003d activeConnections.putIfAbsent(conn, Boolean.TRUE) \u003d\u003d null;\n                        assertTrue(isNew, \"Concurrent access resulted in duplicate lease of the same connection\");\n\n                        // Simulate some work\n                        Thread.yield();\n\n                        // Remove before releasing\n                        boolean removed \u003d activeConnections.remove(conn, Boolean.TRUE);\n                        assertTrue(removed, \"Connection was not actively tracked\");\n\n                        connectionPool.releaseConnection(conn);\n                    }\n                } finally {\n                    latch.countDown();\n                }\n            });\n        }\n\n        boolean completed \u003d latch.await(10, TimeUnit.SECONDS);\n        assertTrue(completed, \"Concurrent test timed out\");\n        executorService.shutdown();\n    }\n}",
-      "status": "GENERATED",
-      "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/database/ConnectionPoolTest.java:32:5:shouldNotExceedPoolSizeOnRelease:ConnectionPoolTest:shouldNotExceedPoolSizeOnRelease()",
-      "contextStatus": "MATCHED",
-      "issueReferences": [
-        {
-          "value": "DEBT2TEST-3",
-          "source": "comment"
-        }
-      ],
-      "externalTask": {
-        "provider": "jira",
-        "key": "DEBT2TEST-3",
-        "summary": "Fix ConnectionPool race condition",
-        "description": "{{ConnectionPool.getConnection()}} and {{releaseConnection()}} access the shared {{availableConnections}} queue without synchronization, risking duplicate leases, lost connections, and pool exhaustion under load.\n\n*Debt context (SATD):* {{ConnectionPool}} — BUG comment blocks deployment to high-concurrency environments (10k+ RPS).\n\n*Acceptance Criteria:*\n\n* Replace {{LinkedList}} with {{ConcurrentLinkedQueue}}, or add proper synchronization around both methods.\n* Add a concurrency test that exercises concurrent {{getConnection}}/{{releaseConnection}} calls without lost or duplicated connections.",
-        "acceptanceCriteria": [],
-        "labels": [],
-        "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-3"
-      },
-      "classificationProvenance": {
-        "provider": "DebtHunter",
-        "strategy": "heuristic-fallback",
-        "version": "unavailable"
-      },
-      "errors": [],
-      "provider": "gemini",
-      "model": "gemini-3.5-flash-lite",
-      "promptVersion": "v1",
-      "validationStatus": "NOT_RUN",
-      "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
-      "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-      "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
+    "errors": [],
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "promptVersion": "v1",
+    "validationStatus": "NOT_RUN",
+    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
+    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
+    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
+  },
+  {
+    "filePath": "src/main/java/io/github/jonasfortes12/samples/debt/logging/AuditLogger.java",
+    "methodName": "logRequest",
+    "lineNumber": 14,
+    "comment": "* FIXME DEBT2TEST-6: bug, logged entries contain the raw password and card number in plaintext.\n     * The request is logged via toString() with no redaction step.",
+    "methodSourceCode": "/**\n * FIXME DEBT2TEST-6: bug, logged entries contain the raw password and card number in plaintext.\n * The request is logged via toString() with no redaction step.\n */\npublic void logRequest(Request request) {\n    sink.add(request.toString());\n}",
+    "isSatd": true,
+    "debtType": "DESIGN",
+    "confidence": 0.4,
+    "generatedTestCode": "package com.example.audit;\n\nimport org.junit.jupiter.api.BeforeEach;\nimport org.junit.jupiter.api.DisplayName;\nimport org.junit.jupiter.api.Nested;\nimport org.junit.jupiter.api.Test;\n\nimport java.util.ArrayList;\nimport java.util.List;\n\nimport static org.junit.jupiter.api.Assertions.assertAll;\nimport static org.junit.jupiter.api.Assertions.assertEquals;\nimport static org.junit.jupiter.api.Assertions.assertFalse;\nimport static org.junit.jupiter.api.Assertions.assertTrue;\n\n/**\n * Regression tests for DEBT2TEST-6: AuditLogger.logRequest() must never write\n * sensitive values (password, card number, SSN) to the log sink in plaintext.\n *\n * Assumptions (adjust to the actual API in the codebase):\n *  - AuditLogger is constructed with a List\u003cString\u003e sink (entries are appended to it).\n *  - Request exposes a constructor/builder accepting the fields used below.\n *  - Non-sensitive fields (requestId, username, amount) are expected to remain in the log.\n *\n * These tests are expected to FAIL against the current implementation (sink.add(request.toString()))\n * and PASS once a redaction step is applied before logging.\n */\n@DisplayName(\"AuditLogger redaction (DEBT2TEST-6)\")\nclass AuditLoggerRedactionTest {\n\n    private static final String REQUEST_ID \u003d \"req-1001\";\n    private static final String USERNAME \u003d \"alice\";\n    private static final String RAW_PASSWORD \u003d \"Sup3r$ecretPw!\";\n    private static final String RAW_CARD_NUMBER \u003d \"4111111111111111\";\n    private static final String RAW_CARD_FORMATTED \u003d \"4111 1111 1111 1111\";\n    private static final String RAW_SSN \u003d \"123-45-6789\";\n\n    private List\u003cString\u003e sink;\n    private AuditLogger auditLogger;\n\n    @BeforeEach\n    void setUp() {\n        sink \u003d new ArrayList\u003c\u003e();\n        auditLogger \u003d new AuditLogger(sink);\n    }\n\n    private Request sensitiveRequest() {\n        // Adjust to the real Request construction API.\n        return new Request(REQUEST_ID, USERNAME, RAW_PASSWORD, RAW_CARD_NUMBER, RAW_SSN, 42.50);\n    }\n\n    private static String digitsOnly(String s) {\n        return s.replaceAll(\"\\\\D\", \"\");\n    }\n\n    @Nested\n    @DisplayName(\"Sensitive values never reach the sink in plaintext\")\n    class SensitiveValueRedaction {\n\n        @Test\n        @DisplayName(\"raw password is not written to the log\")\n        void logRequest_doesNotWriteRawPassword() {\n            auditLogger.logRequest(sensitiveRequest());\n\n            assertEquals(1, sink.size(), \"exactly one entry expected\");\n            assertFalse(sink.get(0).contains(RAW_PASSWORD),\n                    \"raw password must not appear in the audit log entry\");\n        }\n\n        @Test\n        @DisplayName(\"raw card number is not written to the log (plain form)\")\n        void logRequest_doesNotWriteRawCardNumber() {\n            auditLogger.logRequest(sensitiveRequest());\n\n            assertFalse(sink.get(0).contains(RAW_CARD_NUMBER),\n                    \"full PAN must not appear in the audit log entry\");\n        }\n\n        @Test\n        @DisplayName(\"card number is not written to the log (formatted/separated form)\")\n        void logRequest_doesNotWriteFormattedCardNumber() {\n            auditLogger.logRequest(sensitiveRequest());\n\n            String entry \u003d sink.get(0);\n            assertFalse(entry.contains(RAW_CARD_FORMATTED),\n                    \"space-separated PAN must not appear in the audit log entry\");\n            assertFalse(digitsOnly(entry).contains(RAW_CARD_NUMBER),\n                    \"PAN digit sequence must not be recoverable from the audit log entry\");\n        }\n\n        @Test\n        @DisplayName(\"raw SSN is not written to the log\")\n        void logRequest_doesNotWriteRawSsn() {\n            auditLogger.logRequest(sensitiveRequest());\n\n            String entry \u003d sink.get(0);\n            assertFalse(entry.contains(RAW_SSN), \"raw SSN must not appear in the audit log entry\");\n            assertFalse(digitsOnly(entry).contains(digitsOnly(RAW_SSN)),\n                    \"SSN digit sequence must not be recoverable from the audit log entry\");\n        }\n\n        @Test\n        @DisplayName(\"no sensitive value leaks across multiple logged requests\")\n        void logRequest_multipleRequests_noSensitiveValueLeaks() {\n            auditLogger.logRequest(sensitiveRequest());\n            auditLogger.logRequest(sensitiveRequest());\n            auditLogger.logRequest(sensitiveRequest());\n\n            assertEquals(3, sink.size());\n            for (String entry : sink) {\n                assertAll(\n                        () -\u003e assertFalse(entry.contains(RAW_PASSWORD), \"password leaked: \" + entry),\n                        () -\u003e assertFalse(entry.contains(RAW_CARD_NUMBER), \"PAN leaked: \" + entry),\n                        () -\u003e assertFalse(entry.contains(RAW_SSN), \"SSN leaked: \" + entry)\n                );\n            }\n        }\n    }\n\n    @Nested\n    @DisplayName(\"Redaction preserves audit usefulness\")\n    class RedactionPreservesAuditValue {\n\n        @Test\n        @DisplayName(\"card number is masked, retaining only the last four digits\")\n        void logRequest_cardNumberMaskedToLastFour() {\n            auditLogger.logRequest(sensitiveRequest());\n\n            String entry \u003d sink.get(0);\n            assertTrue(entry.contains(\"1111\"),\n                    \"last four digits should remain to support audit correlation\");\n            assertTrue(entry.contains(\"*\") || entry.toLowerCase().contains(\"masked\")\n                            || entry.toLowerCase().contains(\"redacted\"),\n                    \"card number should carry an explicit mask/redaction marker\");\n        }\n\n        @Test\n        @DisplayName(\"non-sensitive fields remain present in the log entry\")\n        void logRequest_preservesNonSensitiveFields() {\n            auditLogger.logRequest(sensitiveRequest());\n\n            String entry \u003d sink.get(0);\n            assertAll(\n                    () -\u003e assertTrue(entry.contains(REQUEST_ID), \"requestId should be logged\"),\n                    () -\u003e assertTrue(entry.contains(USERNAME), \"username should be logged\")\n            );\n        }\n\n        @Test\n        @DisplayName(\"redacted entry is still produced for each request (no dropped audit records)\")\n        void logRequest_alwaysWritesEntry() {\n            auditLogger.logRequest(sensitiveRequest());\n\n            assertFalse(sink.isEmpty(), \"audit entry must not be dropped by redaction\");\n            assertFalse(sink.get(0).isBlank(), \"audit entry must not be blank\");\n        }\n    }\n}",
+    "status": "GENERATED",
+    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/main/java/io/github/jonasfortes12/samples/debt/logging/AuditLogger.java:14:5:logRequest:AuditLogger:logRequest(Request)",
+    "contextStatus": "MATCHED",
+    "issueReferences": [
+      {
+        "value": "DEBT2TEST-6",
+        "source": "comment"
+      }
+    ],
+    "externalTask": {
+      "provider": "jira",
+      "key": "DEBT2TEST-6",
+      "summary": "Redact sensitive data from audit logs",
+      "description": "AuditLogger.logRequest() writes full request objects to the log via toString(), including raw passwords and credit card numbers, in plaintext.\n\nDebt context (SATD): AuditLogger — FIXME comment flags this as a compliance risk (PCI-DSS/GDPR) introduced during the 2023 audit-trail rollout, since logs are shipped to a third-party aggregator.\n\nAcceptance Criteria:\n\n* Introduce a redaction step (field allowlist or masking) before any object is logged.\n* Sensitive fields (password, cardNumber, ssn, etc.) never reach the log sink in plaintext.\n* Unit test asserts logged output does not contain raw sensitive values.",
+      "acceptanceCriteria": [],
+      "labels": [],
+      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-6"
     },
-    {
-      "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/database/OrderRepositoryTest.java",
-      "methodName": "currentlyIssuesOneQueryPerCustomer",
-      "lineNumber": 25,
-      "comment": "DEBT2TEST-7: one query is issued per customer ID instead of a single\nbatched lookup, so the query count scales linearly with input size.",
-      "methodSourceCode": "// DEBT2TEST-7: one query is issued per customer ID instead of a single\n// batched lookup, so the query count scales linearly with input size.\n@Test\nvoid currentlyIssuesOneQueryPerCustomer() {\n    orderRepository.findOrdersForCustomers(List.of(\"c1\", \"c2\", \"c3\"));\n    assertEquals(3, orderRepository.getQueryCount());\n}",
-      "isSatd": true,
-      "debtType": "TEST",
-      "confidence": null,
-      "generatedTestCode": "import static org.junit.jupiter.api.Assertions.assertEquals;\n\nimport java.util.List;\nimport org.junit.jupiter.api.BeforeEach;\nimport org.junit.jupiter.api.Test;\n\nclass OrderRepositoryTest {\n\n    private OrderRepository orderRepository;\n\n    @BeforeEach\n    void setUp() {\n        orderRepository \u003d new OrderRepository();\n    }\n\n    @Test\n    void findsOrdersForCustomersUsingBatchedQuery() {\n        // Given a list of multiple customer IDs\n        List\u003cString\u003e customerIds \u003d List.of(\"c1\", \"c2\", \"c3\", \"c4\", \"c5\");\n\n        // When the repository method is called\n        orderRepository.findOrdersForCustomers(customerIds);\n\n        // Then exactly one batched query should be issued regardless of the input size,\n        // resolving the N+1 query performance debt.\n        assertEquals(1, orderRepository.getQueryCount());\n    }\n}",
-      "status": "GENERATED",
-      "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/database/OrderRepositoryTest.java:25:5:currentlyIssuesOneQueryPerCustomer:OrderRepositoryTest:currentlyIssuesOneQueryPerCustomer()",
-      "contextStatus": "MATCHED",
-      "issueReferences": [
-        {
-          "value": "DEBT2TEST-7",
-          "source": "comment"
-        }
-      ],
-      "externalTask": {
-        "provider": "jira",
-        "key": "DEBT2TEST-7",
-        "summary": "Batch OrderRepository customer lookups to remove N+1 queries",
-        "description": "OrderRepository.findOrdersForCustomers() loops over customer IDs and issues one simulated query per customer instead of a single batched lookup, causing an N+1 query pattern.\n\nDebt context (SATD): OrderRepository — TODO comment notes this was written for a single-customer admin screen and was never revisited when the bulk \"customer orders export\" feature reused it, where it now issues hundreds of queries per export.\n\nAcceptance Criteria:\n\n* Replace the per-ID loop with a single batched query (e.g., WHERE customer_id IN (...)).\n* findOrdersForCustomers() issues one query regardless of input size.\n* Test covers a multi-customer call and asserts the query/call count.",
-        "acceptanceCriteria": [],
-        "labels": [],
-        "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-7"
-      },
-      "classificationProvenance": {
-        "provider": "DebtHunter",
-        "strategy": "heuristic-fallback",
-        "version": "unavailable"
-      },
-      "errors": [],
-      "provider": "gemini",
-      "model": "gemini-3.5-flash-lite",
-      "promptVersion": "v1",
-      "validationStatus": "NOT_RUN",
-      "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
-      "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-      "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
+    "classificationProvenance": {
+      "provider": "DebtHunter",
+      "strategy": "model",
+      "version": "configured"
     },
-    {
-      "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/logging/AuditLoggerTest.java",
-      "methodName": "currentlyLogsSensitiveFieldsInPlaintext",
-      "lineNumber": 24,
-      "comment": "DEBT2TEST-6: logged entries currently contain the raw password and\ncard number in plaintext because there is no redaction step yet.",
-      "methodSourceCode": "// DEBT2TEST-6: logged entries currently contain the raw password and\n// card number in plaintext because there is no redaction step yet.\n@Test\nvoid currentlyLogsSensitiveFieldsInPlaintext() {\n    auditLogger.logRequest(new AuditLogger.Request(\"alice\", \"s3cr3t\", \"4111111111111111\"));\n    String entry \u003d auditLogger.getLoggedEntries().get(0);\n    assertTrue(entry.contains(\"s3cr3t\"));\n    assertTrue(entry.contains(\"4111111111111111\"));\n}",
-      "isSatd": true,
-      "debtType": "TEST",
-      "confidence": null,
-      "generatedTestCode": "import org.junit.jupiter.api.BeforeEach;\nimport org.junit.jupiter.api.Test;\n\nimport static org.junit.jupiter.api.Assertions.assertFalse;\nimport static org.junit.jupiter.api.Assertions.assertTrue;\n\nclass AuditLoggerTest {\n\n    private AuditLogger auditLogger;\n\n    @BeforeEach\n    void setUp() {\n        auditLogger \u003d new AuditLogger();\n    }\n\n    @Test\n    void doesNotLogSensitiveFieldsInPlaintext() {\n        String rawPassword \u003d \"s3cr3t\";\n        String rawCardNumber \u003d \"4111111111111111\";\n\n        auditLogger.logRequest(new AuditLogger.Request(\"alice\", rawPassword, rawCardNumber));\n        \n        String entry \u003d auditLogger.getLoggedEntries().get(0);\n        \n        // Assert that the log entry is not null and does not contain raw sensitive values\n        assertFalse(entry.contains(rawPassword), \"Log entry should not contain the raw password\");\n        assertFalse(entry.contains(rawCardNumber), \"Log entry should not contain the raw card number\");\n        \n        // Optionally assert that some form of redaction or masking took place\n        assertTrue(entry.contains(\"alice\"), \"Log entry should still contain non-sensitive data\");\n    }\n}",
-      "status": "GENERATED",
-      "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/logging/AuditLoggerTest.java:24:5:currentlyLogsSensitiveFieldsInPlaintext:AuditLoggerTest:currentlyLogsSensitiveFieldsInPlaintext()",
-      "contextStatus": "MATCHED",
-      "issueReferences": [
-        {
-          "value": "DEBT2TEST-6",
-          "source": "comment"
-        }
-      ],
-      "externalTask": {
-        "provider": "jira",
-        "key": "DEBT2TEST-6",
-        "summary": "Redact sensitive data from audit logs",
-        "description": "AuditLogger.logRequest() writes full request objects to the log via toString(), including raw passwords and credit card numbers, in plaintext.\n\nDebt context (SATD): AuditLogger — FIXME comment flags this as a compliance risk (PCI-DSS/GDPR) introduced during the 2023 audit-trail rollout, since logs are shipped to a third-party aggregator.\n\nAcceptance Criteria:\n\n* Introduce a redaction step (field allowlist or masking) before any object is logged.\n* Sensitive fields (password, cardNumber, ssn, etc.) never reach the log sink in plaintext.\n* Unit test asserts logged output does not contain raw sensitive values.",
-        "acceptanceCriteria": [],
-        "labels": [],
-        "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-6"
-      },
-      "classificationProvenance": {
-        "provider": "DebtHunter",
-        "strategy": "heuristic-fallback",
-        "version": "unavailable"
-      },
-      "errors": [],
-      "provider": "gemini",
-      "model": "gemini-3.5-flash-lite",
-      "promptVersion": "v1",
-      "validationStatus": "NOT_RUN",
-      "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
-      "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-      "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
+    "errors": [],
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "promptVersion": "v1",
+    "validationStatus": "NOT_RUN",
+    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
+    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
+    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
+  },
+  {
+    "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/cache/CacheManagerTest.java",
+    "methodName": "shouldReportCorrectSize",
+    "lineNumber": 36,
+    "comment": "TODO DEBT2TEST-4: add tests, no test covers eviction under memory pressure because\nthe cache has no eviction policy or maxSize limit yet.",
+    "methodSourceCode": "// TODO DEBT2TEST-4: add tests, no test covers eviction under memory pressure because\n// the cache has no eviction policy or maxSize limit yet.\n@Test\nvoid shouldReportCorrectSize() {\n    cacheManager.put(\"a\", 1);\n    cacheManager.put(\"b\", 2);\n    assertEquals(2, cacheManager.size());\n}",
+    "isSatd": true,
+    "debtType": "TEST",
+    "confidence": 0.4,
+    "generatedTestCode": "import org.junit.jupiter.api.BeforeEach;\nimport org.junit.jupiter.api.Test;\nimport org.junit.jupiter.api.DisplayName;\n\nimport static org.junit.jupiter.api.Assertions.*;\n\n/**\n * Tests for CacheManager\u0027s bounded LRU behavior.\n *\n * Assumed API (per DEBT2TEST-4 acceptance criteria):\n *   - new CacheManager(int maxSize)  // maxSize must be \u003e 0\n *   - void put(K key, V value)\n *   - V get(K key)                   // returns null if absent/evicted; counts as an access\n *   - boolean containsKey(K key)\n *   - int size()\n *   - int getMaxSize()\n */\nclass CacheManagerTest {\n\n    private static final int MAX_SIZE \u003d 3;\n\n    private CacheManager\u003cString, Integer\u003e cacheManager;\n\n    @BeforeEach\n    void setUp() {\n        cacheManager \u003d new CacheManager\u003c\u003e(MAX_SIZE);\n    }\n\n    @Test\n    void shouldReportCorrectSize() {\n        cacheManager.put(\"a\", 1);\n        cacheManager.put(\"b\", 2);\n        assertEquals(2, cacheManager.size());\n    }\n\n    @Test\n    @DisplayName(\"exposes configured maxSize\")\n    void shouldExposeConfiguredMaxSize() {\n        assertEquals(MAX_SIZE, cacheManager.getMaxSize());\n    }\n\n    @Test\n    @DisplayName(\"rejects non-positive maxSize\")\n    void shouldRejectNonPositiveMaxSize() {\n        assertThrows(IllegalArgumentException.class, () -\u003e new CacheManager\u003cString, Integer\u003e(0));\n        assertThrows(IllegalArgumentException.class, () -\u003e new CacheManager\u003cString, Integer\u003e(-1));\n    }\n\n    @Test\n    @DisplayName(\"does not evict while size is within maxSize\")\n    void shouldNotEvictWithinMaxSize() {\n        cacheManager.put(\"a\", 1);\n        cacheManager.put(\"b\", 2);\n        cacheManager.put(\"c\", 3);\n\n        assertEquals(MAX_SIZE, cacheManager.size());\n        assertTrue(cacheManager.containsKey(\"a\"));\n        assertTrue(cacheManager.containsKey(\"b\"));\n        assertTrue(cacheManager.containsKey(\"c\"));\n    }\n\n    @Test\n    @DisplayName(\"evicts least recently used entry once maxSize is exceeded\")\n    void shouldEvictLeastRecentlyUsedWhenMaxSizeExceeded() {\n        cacheManager.put(\"a\", 1);\n        cacheManager.put(\"b\", 2);\n        cacheManager.put(\"c\", 3);\n\n        cacheManager.put(\"d\", 4); // exceeds maxSize; \"a\" is LRU\n\n        assertEquals(MAX_SIZE, cacheManager.size());\n        assertFalse(cacheManager.containsKey(\"a\"));\n        assertNull(cacheManager.get(\"a\"));\n        assertEquals(2, cacheManager.get(\"b\"));\n        assertEquals(3, cacheManager.get(\"c\"));\n        assertEquals(4, cacheManager.get(\"d\"));\n    }\n\n    @Test\n    @DisplayName(\"evicts exactly one entry per insert beyond capacity\")\n    void shouldEvictExactlyOneEntryPerInsert() {\n        cacheManager.put(\"a\", 1);\n        cacheManager.put(\"b\", 2);\n        cacheManager.put(\"c\", 3);\n\n        cacheManager.put(\"d\", 4);\n        assertEquals(MAX_SIZE, cacheManager.size());\n\n        cacheManager.put(\"e\", 5);\n        assertEquals(MAX_SIZE, cacheManager.size());\n        assertFalse(cacheManager.containsKey(\"b\"));\n        assertFalse(cacheManager.containsKey(\"c\") \u0026\u0026 !cacheManager.containsKey(\"d\"));\n    }\n\n    @Test\n    @DisplayName(\"get refreshes access order so recently read entry survives eviction\")\n    void shouldRetainRecentlyAccessedEntryOnEviction() {\n        cacheManager.put(\"a\", 1);\n        cacheManager.put(\"b\", 2);\n        cacheManager.put(\"c\", 3);\n\n        assertEquals(1, cacheManager.get(\"a\")); // \"a\" becomes most recently used\n\n        cacheManager.put(\"d\", 4); // should evict \"b\", not \"a\"\n\n        assertTrue(cacheManager.containsKey(\"a\"));\n        assertFalse(cacheManager.containsKey(\"b\"));\n        assertTrue(cacheManager.containsKey(\"c\"));\n        assertTrue(cacheManager.containsKey(\"d\"));\n    }\n\n    @Test\n    @DisplayName(\"updating an existing key does not trigger eviction\")\n    void shouldNotEvictWhenUpdatingExistingKey() {\n        cacheManager.put(\"a\", 1);\n        cacheManager.put(\"b\", 2);\n        cacheManager.put(\"c\", 3);\n\n        cacheManager.put(\"a\", 10); // update, not insert\n\n        assertEquals(MAX_SIZE, cacheManager.size());\n        assertEquals(10, cacheManager.get(\"a\"));\n        assertTrue(cacheManager.containsKey(\"b\"));\n        assertTrue(cacheManager.containsKey(\"c\"));\n    }\n\n    @Test\n    @DisplayName(\"size stays bounded under sustained memory pressure\")\n    void shouldBoundSizeUnderSustainedInserts() {\n        int totalInserts \u003d 10_000;\n        for (int i \u003d 0; i \u003c totalInserts; i++) {\n            cacheManager.put(\"key-\" + i, i);\n            assertTrue(cacheManager.size() \u003c\u003d MAX_SIZE,\n                    \"size exceeded maxSize at insert \" + i);\n        }\n\n        assertEquals(MAX_SIZE, cacheManager.size());\n        // Only the most recent MAX_SIZE entries should remain\n        for (int i \u003d totalInserts - MAX_SIZE; i \u003c totalInserts; i++) {\n            assertEquals(i, cacheManager.get(\"key-\" + i));\n        }\n        assertNull(cacheManager.get(\"key-0\"));\n    }\n\n    @Test\n    @DisplayName(\"evicted entries are no longer retrievable\")\n    void shouldNotReturnEvictedEntries() {\n        for (int i \u003d 0; i \u003c MAX_SIZE + 5; i++) {\n            cacheManager.put(\"k\" + i, i);\n        }\n\n        for (int i \u003d 0; i \u003c 5; i++) {\n            assertNull(cacheManager.get(\"k\" + i), \"evicted key k\" + i + \" should be absent\");\n        }\n    }\n}",
+    "status": "GENERATED",
+    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/test/java/io/github/jonasfortes12/samples/debt/cache/CacheManagerTest.java:36:5:shouldReportCorrectSize:CacheManagerTest:shouldReportCorrectSize()",
+    "contextStatus": "MATCHED",
+    "issueReferences": [
+      {
+        "value": "DEBT2TEST-4",
+        "source": "comment"
+      }
+    ],
+    "externalTask": {
+      "provider": "jira",
+      "key": "DEBT2TEST-4",
+      "summary": "Implement bounded LRU cache",
+      "description": "{{CacheManager}} uses an unbounded {{HashMap}} with no eviction policy, risking {{OutOfMemoryError}} in production. Reported by DevOps after an incident on 2024-01-15.\n\n*Debt context (SATD):* {{CacheManager}} — TODO comment calls for an LRU cache with a max size limit.\n\n*Acceptance Criteria:*\n\n* Replace the unbounded {{HashMap}} with a bounded LRU cache (e.g., {{LinkedHashMap}} in access-order mode, or a dedicated LRU structure).\n* Cache exposes a configurable {{maxSize}}.\n* Unit tests confirm eviction occurs once {{maxSize}} is exceeded.",
+      "acceptanceCriteria": [],
+      "labels": [],
+      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-4"
     },
-    {
-      "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/payment/PaymentProcessorTest.java",
-      "methodName": "shouldFailOnNegativeAmountAfterRetries",
-      "lineNumber": 24,
-      "comment": "DEBT2TEST-2: the retry path around the hardcoded gateway timeout is\nonly exercised indirectly here, since the timeout cannot be injected.",
-      "methodSourceCode": "// DEBT2TEST-2: the retry path around the hardcoded gateway timeout is\n// only exercised indirectly here, since the timeout cannot be injected.\n@Test\nvoid shouldFailOnNegativeAmountAfterRetries() {\n    PaymentProcessor.Order order \u003d new PaymentProcessor.Order(\"order-2\", -50.0);\n    PaymentProcessor.PaymentResult result \u003d paymentProcessor.process(order);\n    assertFalse(result.success());\n}",
-      "isSatd": true,
-      "debtType": "TEST",
-      "confidence": null,
-      "generatedTestCode": "import static org.junit.jupiter.api.Assertions.assertFalse;\nimport static org.junit.jupiter.api.Assertions.assertTrue;\nimport static org.mockito.Mockito.*;\n\nimport org.junit.jupiter.api.BeforeEach;\nimport org.junit.jupiter.api.Test;\nimport org.mockito.Mockito;\n\nclass PaymentProcessorTest {\n\n    private PaymentConfig paymentConfig;\n    private PaymentGateway paymentGateway;\n    private PaymentProcessor paymentProcessor;\n\n    @BeforeEach\n    void setUp() {\n        paymentConfig \u003d new PaymentConfig(100, 3); // Short timeout and 3 max retries for fast testing\n        paymentGateway \u003d mock(PaymentGateway.class);\n        paymentProcessor \u003d new PaymentProcessor(paymentConfig, paymentGateway);\n    }\n\n    @Test\n    void shouldFailOnNegativeAmountAfterRetries() {\n        PaymentProcessor.Order order \u003d new PaymentProcessor.Order(\"order-2\", -50.0);\n        PaymentProcessor.PaymentResult result \u003d paymentProcessor.process(order);\n        assertFalse(result.success());\n    }\n\n    @Test\n    void shouldRetryOnGatewayTimeoutAndEventuallySucceed() {\n        PaymentProcessor.Order order \u003d new PaymentProcessor.Order(\"order-3\", 100.0);\n\n        // Simulate timeout on first two attempts, success on the third\n        when(paymentGateway.charge(any()))\n            .thenThrow(new GatewayTimeoutException(\"Timeout\"))\n            .thenThrow(new GatewayTimeoutException(\"Timeout\"))\n            .thenReturn(new PaymentGateway.GatewayResponse(true));\n\n        PaymentProcessor.PaymentResult result \u003d paymentProcessor.process(order);\n\n        assertTrue(result.success());\n        verify(paymentGateway, times(3)).charge(any());\n    }\n\n    @Test\n    void shouldFailAfterExhaustingMaxRetriesOnTimeout() {\n        PaymentProcessor.Order order \u003d new PaymentProcessor.Order(\"order-4\", 100.0);\n\n        // Simulate timeout exceeding max retry attempts\n        when(paymentGateway.charge(any()))\n            .thenThrow(new GatewayTimeoutException(\"Timeout\"));\n\n        PaymentProcessor.PaymentResult result \u003d paymentProcessor.process(order);\n\n        assertFalse(result.success());\n        verify(paymentGateway, times(paymentConfig.getMaxRetryAttempts()).charge(any());\n    }\n}",
-      "status": "GENERATED",
-      "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/payment/PaymentProcessorTest.java:24:5:shouldFailOnNegativeAmountAfterRetries:PaymentProcessorTest:shouldFailOnNegativeAmountAfterRetries()",
-      "contextStatus": "MATCHED",
-      "issueReferences": [
-        {
-          "value": "DEBT2TEST-2",
-          "source": "comment"
-        }
-      ],
-      "externalTask": {
-        "provider": "jira",
-        "key": "DEBT2TEST-2",
-        "summary": "Refactor payment timeout configuration",
-        "description": "The payment gateway timeout is hardcoded ({{GATEWAY_TIMEOUT_MS \u003d 5000}}) directly in {{PaymentProcessor}}, mixing configuration with business logic and making the retry path untestable without manual intervention.\n\n*Debt context (SATD):* {{PaymentProcessor}} — FIXME comment calls for extracting the timeout into a separate configuration class.\n\n*Acceptance Criteria:*\n\n* Extract {{GATEWAY_TIMEOUT_MS}} and {{MAX_RETRY_ATTEMPTS}} into an injectable configuration object.\n* {{PaymentProcessor}} receives configuration via constructor/DI instead of static constants.\n* Retry/timeout behavior is covered by unit tests using injected configuration values.",
-        "acceptanceCriteria": [],
-        "labels": [],
-        "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-2"
-      },
-      "classificationProvenance": {
-        "provider": "DebtHunter",
-        "strategy": "heuristic-fallback",
-        "version": "unavailable"
-      },
-      "errors": [],
-      "provider": "gemini",
-      "model": "gemini-3.5-flash-lite",
-      "promptVersion": "v1",
-      "validationStatus": "NOT_RUN",
-      "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
-      "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-      "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
-    }
-  ]
-}
+    "classificationProvenance": {
+      "provider": "DebtHunter",
+      "strategy": "model",
+      "version": "configured"
+    },
+    "errors": [],
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "promptVersion": "v1",
+    "validationStatus": "NOT_RUN",
+    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
+    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
+    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
+  },
+  {
+    "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/database/ConnectionPoolTest.java",
+    "methodName": "shouldNotExceedPoolSizeOnRelease",
+    "lineNumber": 32,
+    "comment": "TODO DEBT2TEST-3: add tests for concurrent access; it is untested because the pool\nlacks synchronization and a concurrency test would be flaky.",
+    "methodSourceCode": "// TODO DEBT2TEST-3: add tests for concurrent access; it is untested because the pool\n// lacks synchronization and a concurrency test would be flaky.\n@Test\nvoid shouldNotExceedPoolSizeOnRelease() throws InterruptedException {\n    ConnectionPool.DbConnection conn \u003d connectionPool.getConnection();\n    connectionPool.releaseConnection(conn);\n    connectionPool.releaseConnection(conn);\n    assertTrue(true);\n}",
+    "isSatd": true,
+    "debtType": "TEST",
+    "confidence": 0.4,
+    "generatedTestCode": "import org.junit.jupiter.api.AfterEach;\nimport org.junit.jupiter.api.BeforeEach;\nimport org.junit.jupiter.api.Test;\nimport org.junit.jupiter.api.Timeout;\n\nimport java.time.Duration;\nimport java.util.ArrayList;\nimport java.util.Collections;\nimport java.util.HashSet;\nimport java.util.List;\nimport java.util.Set;\nimport java.util.concurrent.ConcurrentHashMap;\nimport java.util.concurrent.ConcurrentLinkedQueue;\nimport java.util.concurrent.CountDownLatch;\nimport java.util.concurrent.ExecutorService;\nimport java.util.concurrent.Executors;\nimport java.util.concurrent.Future;\nimport java.util.concurrent.TimeUnit;\nimport java.util.concurrent.atomic.AtomicInteger;\n\nimport static org.junit.jupiter.api.Assertions.*;\n\n/**\n * Tests for ConnectionPool concurrent access (DEBT2TEST-3).\n *\n * Assumes ConnectionPool exposes:\n *   - a constructor ConnectionPool(int size)\n *   - DbConnection getConnection()\n *   - void releaseConnection(DbConnection conn)\n *   - nested static class ConnectionPool.DbConnection\n * and that getConnection() never hands out a connection that is still leased.\n *\n * Thread count is kept \u003c\u003d pool size so each worker holds at most one lease at a time,\n * which makes the invariants deterministic (no reliance on timing for pass/fail).\n */\nclass ConnectionPoolConcurrencyTest {\n\n    private static final int POOL_SIZE \u003d 8;\n    private static final int THREADS \u003d 8;\n    private static final int ITERATIONS_PER_THREAD \u003d 1_000;\n\n    private ConnectionPool connectionPool;\n    private ExecutorService executor;\n\n    @BeforeEach\n    void setUp() {\n        connectionPool \u003d new ConnectionPool(POOL_SIZE);\n        executor \u003d Executors.newFixedThreadPool(THREADS);\n    }\n\n    @AfterEach\n    void tearDown() throws InterruptedException {\n        executor.shutdownNow();\n        executor.awaitTermination(5, TimeUnit.SECONDS);\n    }\n\n    @Test\n    @Timeout(value \u003d 10, unit \u003d TimeUnit.SECONDS)\n    void shouldNotHandOutSameConnectionTwiceAfterDoubleRelease() {\n        ConnectionPool.DbConnection conn \u003d connectionPool.getConnection();\n        assertNotNull(conn);\n\n        connectionPool.releaseConnection(conn);\n        connectionPool.releaseConnection(conn); // duplicate release must be tolerated\n\n        // Drain the pool: every lease must be distinct, so the double-released\n        // connection must not appear more than once.\n        Set\u003cConnectionPool.DbConnection\u003e leased \u003d Collections.newSetFromMap(new java.util.IdentityHashMap\u003c\u003e());\n        for (int i \u003d 0; i \u003c POOL_SIZE; i++) {\n            ConnectionPool.DbConnection c \u003d connectionPool.getConnection();\n            assertNotNull(c, \"pool should still supply connections after double release\");\n            assertTrue(leased.add(c), \"same connection leased twice after double release\");\n        }\n        assertEquals(POOL_SIZE, leased.size());\n    }\n\n    @Test\n    @Timeout(value \u003d 60, unit \u003d TimeUnit.SECONDS)\n    void concurrentGetAndReleaseShouldNeverDuplicateLeases() throws Exception {\n        Set\u003cConnectionPool.DbConnection\u003e currentlyLeased \u003d\n                Collections.newSetFromMap(new ConcurrentHashMap\u003c\u003e());\n        ConcurrentLinkedQueue\u003cString\u003e violations \u003d new ConcurrentLinkedQueue\u003c\u003e();\n        AtomicInteger completedOps \u003d new AtomicInteger();\n        CountDownLatch startGate \u003d new CountDownLatch(1);\n\n        List\u003cFuture\u003c?\u003e\u003e futures \u003d new ArrayList\u003c\u003e();\n        for (int t \u003d 0; t \u003c THREADS; t++) {\n            futures.add(executor.submit(() -\u003e {\n                startGate.await();\n                for (int i \u003d 0; i \u003c ITERATIONS_PER_THREAD; i++) {\n                    ConnectionPool.DbConnection conn \u003d connectionPool.getConnection();\n                    if (conn \u003d\u003d null) {\n                        violations.add(\"getConnection returned null\");\n                        return null;\n                    }\n                    if (!currentlyLeased.add(conn)) {\n                        violations.add(\"connection leased to two threads at once\");\n                    }\n                    // Remove from tracking BEFORE releasing so a re-lease cannot race the removal.\n                    currentlyLeased.remove(conn);\n                    connectionPool.releaseConnection(conn);\n                    completedOps.incrementAndGet();\n                }\n                return null;\n            }));\n        }\n\n        startGate.countDown();\n        for (Future\u003c?\u003e f : futures) {\n            f.get(50, TimeUnit.SECONDS); // surfaces worker exceptions; bounded wait\n        }\n\n        assertTrue(violations.isEmpty(), \"concurrency violations: \" + violations);\n        assertEquals(THREADS * ITERATIONS_PER_THREAD, completedOps.get(),\n                \"lost operations detected\");\n    }\n\n    @Test\n    @Timeout(value \u003d 60, unit \u003d TimeUnit.SECONDS)\n    void noConnectionsAreLostUnderConcurrentChurn() throws Exception {\n        CountDownLatch startGate \u003d new CountDownLatch(1);\n        List\u003cFuture\u003c?\u003e\u003e futures \u003d new ArrayList\u003c\u003e();\n        for (int t \u003d 0; t \u003c THREADS; t++) {\n            futures.add(executor.submit(() -\u003e {\n                startGate.await();\n                for (int i \u003d 0; i \u003c ITERATIONS_PER_THREAD; i++) {\n                    ConnectionPool.DbConnection conn \u003d connectionPool.getConnection();\n                    assertNotNull(conn, \"pool exhausted: connection lost or not returned\");\n                    connectionPool.releaseConnection(conn);\n                }\n                return null;\n            }));\n        }\n\n        startGate.countDown();\n        for (Future\u003c?\u003e f : futures) {\n            f.get(50, TimeUnit.SECONDS);\n        }\n\n        // After all churn, the full set of connections must still be obtainable exactly once.\n        Set\u003cConnectionPool.DbConnection\u003e drained \u003d new HashSet\u003c\u003e();\n        for (int i \u003d 0; i \u003c POOL_SIZE; i++) {\n            ConnectionPool.DbConnection c \u003d assertTimeoutPreemptively(\n                    Duration.ofSeconds(2), connectionPool::getConnection,\n                    \"pool exhausted after concurrent churn\");\n            assertNotNull(c);\n            assertTrue(drained.add(c), \"duplicate connection present after churn\");\n        }\n        assertEquals(POOL_SIZE, drained.size(), \"connections lost during concurrent churn\");\n    }\n}",
+    "status": "GENERATED",
+    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/test/java/io/github/jonasfortes12/samples/debt/database/ConnectionPoolTest.java:32:5:shouldNotExceedPoolSizeOnRelease:ConnectionPoolTest:shouldNotExceedPoolSizeOnRelease()",
+    "contextStatus": "MATCHED",
+    "issueReferences": [
+      {
+        "value": "DEBT2TEST-3",
+        "source": "comment"
+      }
+    ],
+    "externalTask": {
+      "provider": "jira",
+      "key": "DEBT2TEST-3",
+      "summary": "Fix ConnectionPool race condition",
+      "description": "{{ConnectionPool.getConnection()}} and {{releaseConnection()}} access the shared {{availableConnections}} queue without synchronization, risking duplicate leases, lost connections, and pool exhaustion under load.\n\n*Debt context (SATD):* {{ConnectionPool}} — BUG comment blocks deployment to high-concurrency environments (10k+ RPS).\n\n*Acceptance Criteria:*\n\n* Replace {{LinkedList}} with {{ConcurrentLinkedQueue}}, or add proper synchronization around both methods.\n* Add a concurrency test that exercises concurrent {{getConnection}}/{{releaseConnection}} calls without lost or duplicated connections.",
+      "acceptanceCriteria": [],
+      "labels": [],
+      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-3"
+    },
+    "classificationProvenance": {
+      "provider": "DebtHunter",
+      "strategy": "model",
+      "version": "configured"
+    },
+    "errors": [],
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "promptVersion": "v1",
+    "validationStatus": "NOT_RUN",
+    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
+    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
+    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
+  },
+  {
+    "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/database/OrderRepositoryTest.java",
+    "methodName": "currentlyIssuesOneQueryPerCustomer",
+    "lineNumber": 25,
+    "comment": "TODO DEBT2TEST-7: add tests for a single batched lookup; no test covers it, this one\nonly pins the current one-query-per-customer behavior.",
+    "methodSourceCode": "// TODO DEBT2TEST-7: add tests for a single batched lookup; no test covers it, this one\n// only pins the current one-query-per-customer behavior.\n@Test\nvoid currentlyIssuesOneQueryPerCustomer() {\n    orderRepository.findOrdersForCustomers(List.of(\"c1\", \"c2\", \"c3\"));\n    assertEquals(3, orderRepository.getQueryCount());\n}",
+    "isSatd": true,
+    "debtType": "TEST",
+    "confidence": 0.4,
+    "generatedTestCode": "import org.junit.jupiter.api.BeforeEach;\nimport org.junit.jupiter.api.Test;\n\nimport java.util.List;\nimport java.util.stream.Collectors;\nimport java.util.stream.IntStream;\n\nimport static org.junit.jupiter.api.Assertions.assertEquals;\nimport static org.junit.jupiter.api.Assertions.assertNotNull;\nimport static org.junit.jupiter.api.Assertions.assertTrue;\n\n/**\n * Tests for the batched customer lookup in OrderRepository.findOrdersForCustomers().\n *\n * Replaces the legacy test that pinned the N+1 behavior (one query per customer).\n * Once the loop is replaced with a single \"WHERE customer_id IN (...)\" query, the\n * legacy assertion of 3 queries for 3 customers must no longer hold.\n */\nclass OrderRepositoryBatchedLookupTest {\n\n    private OrderRepository orderRepository;\n\n    @BeforeEach\n    void setUp() {\n        // Assumes a fresh repository per test so the query counter starts at zero.\n        orderRepository \u003d new OrderRepository();\n    }\n\n    @Test\n    void findOrdersForCustomersIssuesSingleQueryForMultipleCustomers() {\n        orderRepository.findOrdersForCustomers(List.of(\"c1\", \"c2\", \"c3\"));\n\n        assertEquals(1, orderRepository.getQueryCount(),\n                \"A multi-customer lookup must be satisfied by one batched query, not one per customer\");\n    }\n\n    @Test\n    void findOrdersForCustomersIssuesSingleQueryRegardlessOfInputSize() {\n        List\u003cString\u003e customerIds \u003d IntStream.rangeClosed(1, 250)\n                .mapToObj(i -\u003e \"c\" + i)\n                .collect(Collectors.toList());\n\n        orderRepository.findOrdersForCustomers(customerIds);\n\n        assertEquals(1, orderRepository.getQueryCount(),\n                \"Query count must not scale with the number of customer IDs\");\n    }\n\n    @Test\n    void findOrdersForCustomersIssuesSingleQueryForSingleCustomer() {\n        orderRepository.findOrdersForCustomers(List.of(\"c1\"));\n\n        assertEquals(1, orderRepository.getQueryCount(),\n                \"A single customer lookup should still use exactly one batched query\");\n    }\n\n    @Test\n    void findOrdersForCustomersWithEmptyInputDoesNotIssueMoreThanOneQuery() {\n        orderRepository.findOrdersForCustomers(List.of());\n\n        assertTrue(orderRepository.getQueryCount() \u003c\u003d 1,\n                \"An empty customer list must not trigger per-customer queries\");\n    }\n\n    @Test\n    void findOrdersForCustomersReturnsResultsForAllRequestedCustomers() {\n        var result \u003d orderRepository.findOrdersForCustomers(List.of(\"c1\", \"c2\", \"c3\"));\n\n        assertNotNull(result, \"Batched lookup should return a result for the requested customers\");\n        assertEquals(1, orderRepository.getQueryCount(),\n                \"Result retrieval must still be backed by a single batched query\");\n    }\n}",
+    "status": "GENERATED",
+    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/test/java/io/github/jonasfortes12/samples/debt/database/OrderRepositoryTest.java:25:5:currentlyIssuesOneQueryPerCustomer:OrderRepositoryTest:currentlyIssuesOneQueryPerCustomer()",
+    "contextStatus": "MATCHED",
+    "issueReferences": [
+      {
+        "value": "DEBT2TEST-7",
+        "source": "comment"
+      }
+    ],
+    "externalTask": {
+      "provider": "jira",
+      "key": "DEBT2TEST-7",
+      "summary": "Batch OrderRepository customer lookups to remove N+1 queries",
+      "description": "OrderRepository.findOrdersForCustomers() loops over customer IDs and issues one simulated query per customer instead of a single batched lookup, causing an N+1 query pattern.\n\nDebt context (SATD): OrderRepository — TODO comment notes this was written for a single-customer admin screen and was never revisited when the bulk \"customer orders export\" feature reused it, where it now issues hundreds of queries per export.\n\nAcceptance Criteria:\n\n* Replace the per-ID loop with a single batched query (e.g., WHERE customer_id IN (...)).\n* findOrdersForCustomers() issues one query regardless of input size.\n* Test covers a multi-customer call and asserts the query/call count.",
+      "acceptanceCriteria": [],
+      "labels": [],
+      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-7"
+    },
+    "classificationProvenance": {
+      "provider": "DebtHunter",
+      "strategy": "model",
+      "version": "configured"
+    },
+    "errors": [],
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "promptVersion": "v1",
+    "validationStatus": "NOT_RUN",
+    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
+    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
+    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
+  },
+  {
+    "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/logging/AuditLoggerTest.java",
+    "methodName": "currentlyLogsSensitiveFieldsInPlaintext",
+    "lineNumber": 24,
+    "comment": "TODO DEBT2TEST-6: document why this test asserts the plaintext password; explain that\nit pins the current unredacted logging and must be inverted once redaction exists.",
+    "methodSourceCode": "// TODO DEBT2TEST-6: document why this test asserts the plaintext password; explain that\n// it pins the current unredacted logging and must be inverted once redaction exists.\n@Test\nvoid currentlyLogsSensitiveFieldsInPlaintext() {\n    auditLogger.logRequest(new AuditLogger.Request(\"alice\", \"s3cr3t\", \"4111111111111111\"));\n    String entry \u003d auditLogger.getLoggedEntries().get(0);\n    assertTrue(entry.contains(\"s3cr3t\"));\n    assertTrue(entry.contains(\"4111111111111111\"));\n}",
+    "isSatd": true,
+    "debtType": "DOCUMENTATION",
+    "confidence": 0.4,
+    "generatedTestCode": "import org.junit.jupiter.api.BeforeEach;\nimport org.junit.jupiter.api.Disabled;\nimport org.junit.jupiter.api.DisplayName;\nimport org.junit.jupiter.api.Test;\n\nimport static org.junit.jupiter.api.Assertions.assertFalse;\nimport static org.junit.jupiter.api.Assertions.assertTrue;\n\n/**\n * Tests for {@link AuditLogger}.\n *\n * \u003cp\u003e\u003cb\u003eKnown technical debt (DEBT2TEST-6):\u003c/b\u003e {@link AuditLogger#logRequest} writes the\n * full request via {@code toString()}, so raw passwords and card numbers reach the log sink\n * in plaintext. This is a compliance risk (PCI-DSS / GDPR) because logs are shipped to a\n * third-party aggregator. See the related FIXME from the 2023 audit-trail rollout.\n *\n * \u003cp\u003eThe test {@link #currentlyLogsSensitiveFieldsInPlaintext()} is intentionally a\n * \u003cem\u003echaracterization test\u003c/em\u003e. It does not endorse the current behavior. It pins the\n * existing unredacted output so that:\n * \u003cul\u003e\n *   \u003cli\u003ethe current behavior is explicitly documented and visible in the suite, and\u003c/li\u003e\n *   \u003cli\u003eany change to logging output is detected deliberately rather than silently.\u003c/li\u003e\n * \u003c/ul\u003e\n *\n * \u003cp\u003e\u003cb\u003eRemoval plan:\u003c/b\u003e once a redaction step (field allowlist or masking) is added before\n * any object is logged, this test must be inverted. The assertions should verify that the\n * sensitive values are \u003cem\u003eabsent\u003c/em\u003e from the entry. The disabled test\n * {@link #redactsSensitiveFieldsBeforeLogging()} below is the target replacement. Remove the\n * {@code @Disabled} annotation and delete the characterization test when redaction ships.\n */\nclass AuditLoggerTest {\n\n    private AuditLogger auditLogger;\n\n    @BeforeEach\n    void setUp() {\n        auditLogger \u003d new AuditLogger();\n    }\n\n    /**\n     * Characterization test for DEBT2TEST-6.\n     *\n     * \u003cp\u003e\u003cb\u003eWhy this asserts plaintext:\u003c/b\u003e the logger currently has no redaction step, so the\n     * password {@code s3cr3t} and card number {@code 4111111111111111} appear verbatim in the\n     * logged entry. This assertion documents that fact. It is a known violation of the\n     * acceptance criteria (\"sensitive fields never reach the log sink in plaintext\") and\n     * exists only to make the current behavior explicit until redaction is implemented.\n     *\n     * \u003cp\u003e\u003cb\u003eAction required:\u003c/b\u003e this test must be inverted (or deleted and replaced by\n     * {@link #redactsSensitiveFieldsBeforeLogging()}) when redaction is introduced. Leaving it\n     * in place after redaction ships will fail the build, which is intentional.\n     */\n    @Test\n    @DisplayName(\"DEBT2TEST-6: characterizes current unredacted logging of sensitive fields\")\n    void currentlyLogsSensitiveFieldsInPlaintext() {\n        auditLogger.logRequest(new AuditLogger.Request(\"alice\", \"s3cr3t\", \"4111111111111111\"));\n        String entry \u003d auditLogger.getLoggedEntries().get(0);\n\n        // Pins current behavior: raw sensitive values are logged in plaintext (known debt).\n        assertTrue(entry.contains(\"s3cr3t\"));\n        assertTrue(entry.contains(\"4111111111111111\"));\n    }\n\n    /**\n     * Target test for DEBT2TEST-6. Disabled until redaction exists.\n     *\n     * \u003cp\u003eThis is the inverted form of {@link #currentlyLogsSensitiveFieldsInPlaintext()} and\n     * matches the acceptance criterion: \"Unit test asserts logged output does not contain raw\n     * sensitive values.\" Enable it, and delete the characterization test, when the redaction\n     * step is implemented.\n     */\n    @Test\n    @Disabled(\"DEBT2TEST-6: enable once redaction of sensitive fields is implemented\")\n    @DisplayName(\"Redacts password and card number before logging\")\n    void redactsSensitiveFieldsBeforeLogging() {\n        auditLogger.logRequest(new AuditLogger.Request(\"alice\", \"s3cr3t\", \"4111111111111111\"));\n        String entry \u003d auditLogger.getLoggedEntries().get(0);\n\n        assertFalse(entry.contains(\"s3cr3t\"), \"Password must not appear in plaintext in the log\");\n        assertFalse(entry.contains(\"4111111111111111\"), \"Card number must not appear in plaintext in the log\");\n        // Non-sensitive fields should still be logged for auditing purposes.\n        assertTrue(entry.contains(\"alice\"));\n    }\n}",
+    "status": "GENERATED",
+    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/test/java/io/github/jonasfortes12/samples/debt/logging/AuditLoggerTest.java:24:5:currentlyLogsSensitiveFieldsInPlaintext:AuditLoggerTest:currentlyLogsSensitiveFieldsInPlaintext()",
+    "contextStatus": "MATCHED",
+    "issueReferences": [
+      {
+        "value": "DEBT2TEST-6",
+        "source": "comment"
+      }
+    ],
+    "externalTask": {
+      "provider": "jira",
+      "key": "DEBT2TEST-6",
+      "summary": "Redact sensitive data from audit logs",
+      "description": "AuditLogger.logRequest() writes full request objects to the log via toString(), including raw passwords and credit card numbers, in plaintext.\n\nDebt context (SATD): AuditLogger — FIXME comment flags this as a compliance risk (PCI-DSS/GDPR) introduced during the 2023 audit-trail rollout, since logs are shipped to a third-party aggregator.\n\nAcceptance Criteria:\n\n* Introduce a redaction step (field allowlist or masking) before any object is logged.\n* Sensitive fields (password, cardNumber, ssn, etc.) never reach the log sink in plaintext.\n* Unit test asserts logged output does not contain raw sensitive values.",
+      "acceptanceCriteria": [],
+      "labels": [],
+      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-6"
+    },
+    "classificationProvenance": {
+      "provider": "DebtHunter",
+      "strategy": "model",
+      "version": "configured"
+    },
+    "errors": [],
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "promptVersion": "v1",
+    "validationStatus": "NOT_RUN",
+    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
+    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
+    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
+  },
+  {
+    "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/payment/PaymentProcessorTest.java",
+    "methodName": "shouldFailOnNegativeAmountAfterRetries",
+    "lineNumber": 24,
+    "comment": "TODO DEBT2TEST-2: add tests for the retry path; it is untested directly because the\nhardcoded gateway timeout cannot be injected.",
+    "methodSourceCode": "// TODO DEBT2TEST-2: add tests for the retry path; it is untested directly because the\n// hardcoded gateway timeout cannot be injected.\n@Test\nvoid shouldFailOnNegativeAmountAfterRetries() {\n    PaymentProcessor.Order order \u003d new PaymentProcessor.Order(\"order-2\", -50.0);\n    PaymentProcessor.PaymentResult result \u003d paymentProcessor.process(order);\n    assertFalse(result.success());\n}",
+    "isSatd": true,
+    "debtType": "TEST",
+    "confidence": 0.4,
+    "generatedTestCode": "import org.junit.jupiter.api.BeforeEach;\nimport org.junit.jupiter.api.DisplayName;\nimport org.junit.jupiter.api.Nested;\nimport org.junit.jupiter.api.Test;\nimport org.junit.jupiter.params.ParameterizedTest;\nimport org.junit.jupiter.params.provider.ValueSource;\n\nimport static org.junit.jupiter.api.Assertions.assertFalse;\nimport static org.junit.jupiter.api.Assertions.assertNotNull;\n\n/*\n * Assumed production API (per DEBT2TEST-2 acceptance criteria):\n *   - PaymentConfig(long gatewayTimeoutMs, int maxRetryAttempts)  -- injectable configuration\n *   - PaymentProcessor(PaymentConfig config)                      -- configuration via constructor\n *   - PaymentProcessor.Order(String id, double amount)\n *   - PaymentProcessor.PaymentResult with success()\n * Adjust the constructor/config types if the actual signatures differ.\n */\nclass PaymentProcessorRetryTest {\n\n    private static final long TEST_GATEWAY_TIMEOUT_MS \u003d 50L;\n    private static final int TEST_MAX_RETRY_ATTEMPTS \u003d 3;\n\n    private PaymentProcessor paymentProcessor;\n\n    @BeforeEach\n    void setUp() {\n        // Injected configuration replaces the hardcoded GATEWAY_TIMEOUT_MS \u003d 5000\n        PaymentConfig config \u003d new PaymentConfig(TEST_GATEWAY_TIMEOUT_MS, TEST_MAX_RETRY_ATTEMPTS);\n        paymentProcessor \u003d new PaymentProcessor(config);\n    }\n\n    @Test\n    @DisplayName(\"Negative amount fails after retries using injected config\")\n    void shouldFailOnNegativeAmountAfterRetries() {\n        PaymentProcessor.Order order \u003d new PaymentProcessor.Order(\"order-2\", -50.0);\n\n        PaymentProcessor.PaymentResult result \u003d paymentProcessor.process(order);\n\n        assertNotNull(result);\n        assertFalse(result.success());\n    }\n\n    @ParameterizedTest(name \u003d \"negative amount {0} is rejected\")\n    @ValueSource(doubles \u003d {-0.01, -1.0, -50.0, -1000.0})\n    @DisplayName(\"Various negative amounts are rejected on the retry path\")\n    void shouldFailForAnyNegativeAmount(double amount) {\n        PaymentProcessor.Order order \u003d new PaymentProcessor.Order(\"order-neg\", amount);\n\n        PaymentProcessor.PaymentResult result \u003d paymentProcessor.process(order);\n\n        assertFalse(result.success());\n    }\n\n    @Nested\n    @DisplayName(\"With zero retry attempts configured\")\n    class ZeroRetryConfiguration {\n\n        private PaymentProcessor noRetryProcessor;\n\n        @BeforeEach\n        void setUpNoRetry() {\n            PaymentConfig config \u003d new PaymentConfig(TEST_GATEWAY_TIMEOUT_MS, 0);\n            noRetryProcessor \u003d new PaymentProcessor(config);\n        }\n\n        @Test\n        @DisplayName(\"Negative amount still fails when no retries are allowed\")\n        void shouldFailOnNegativeAmountWithoutRetries() {\n            PaymentProcessor.Order order \u003d new PaymentProcessor.Order(\"order-no-retry\", -50.0);\n\n            PaymentProcessor.PaymentResult result \u003d noRetryProcessor.process(order);\n\n            assertFalse(result.success());\n        }\n    }\n\n    @Nested\n    @DisplayName(\"With short gateway timeout configured\")\n    class ShortTimeoutConfiguration {\n\n        private PaymentProcessor shortTimeoutProcessor;\n\n        @BeforeEach\n        void setUpShortTimeout() {\n            PaymentConfig config \u003d new PaymentConfig(1L, TEST_MAX_RETRY_ATTEMPTS);\n            shortTimeoutProcessor \u003d new PaymentProcessor(config);\n        }\n\n        @Test\n        @DisplayName(\"Negative amount fails quickly under a short injected timeout\")\n        void shouldFailOnNegativeAmountWithShortTimeout() {\n            PaymentProcessor.Order order \u003d new PaymentProcessor.Order(\"order-short\", -50.0);\n\n            PaymentProcessor.PaymentResult result \u003d shortTimeoutProcessor.process(order);\n\n            assertFalse(result.success());\n        }\n    }\n}",
+    "status": "GENERATED",
+    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/test/java/io/github/jonasfortes12/samples/debt/payment/PaymentProcessorTest.java:24:5:shouldFailOnNegativeAmountAfterRetries:PaymentProcessorTest:shouldFailOnNegativeAmountAfterRetries()",
+    "contextStatus": "MATCHED",
+    "issueReferences": [
+      {
+        "value": "DEBT2TEST-2",
+        "source": "comment"
+      }
+    ],
+    "externalTask": {
+      "provider": "jira",
+      "key": "DEBT2TEST-2",
+      "summary": "Refactor payment timeout configuration",
+      "description": "The payment gateway timeout is hardcoded ({{GATEWAY_TIMEOUT_MS \u003d 5000}}) directly in {{PaymentProcessor}}, mixing configuration with business logic and making the retry path untestable without manual intervention.\n\n*Debt context (SATD):* {{PaymentProcessor}} — FIXME comment calls for extracting the timeout into a separate configuration class.\n\n*Acceptance Criteria:*\n\n* Extract {{GATEWAY_TIMEOUT_MS}} and {{MAX_RETRY_ATTEMPTS}} into an injectable configuration object.\n* {{PaymentProcessor}} receives configuration via constructor/DI instead of static constants.\n* Retry/timeout behavior is covered by unit tests using injected configuration values.",
+      "acceptanceCriteria": [],
+      "labels": [],
+      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-2"
+    },
+    "classificationProvenance": {
+      "provider": "DebtHunter",
+      "strategy": "model",
+      "version": "configured"
+    },
+    "errors": [],
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "promptVersion": "v1",
+    "validationStatus": "NOT_RUN",
+    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
+    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
+    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
+  }
+]
