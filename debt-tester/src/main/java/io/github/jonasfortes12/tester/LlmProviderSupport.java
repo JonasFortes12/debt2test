@@ -16,7 +16,7 @@ final class LlmProviderSupport {
 
     /** Fixed bounds keep provider calls from hanging indefinitely without adding runtime config surface. */
     static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
-    static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
+    static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(120);
 
     private static final Pattern CODE_FENCE = Pattern.compile(
             "```[ \\t]*(?:[a-z][a-z0-9_+.-]*)?[ \\t]*\\R(.*?)```",

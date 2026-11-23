@@ -28,11 +28,22 @@ public class DotenvEnvironmentPostProcessor implements EnvironmentPostProcessor 
     private static final List<String> KEYS = List.of(
             "DEBT_API_PORT",
             "DEBT_API_ALLOWED_ORIGIN",
-            "DEBT_PERSISTENCE_ENABLED",
             "DEBT_DB_URL",
             "DEBT_DB_USERNAME",
             "DEBT_DB_PASSWORD",
-            "DEBT_DB_POOL_SIZE");
+            "DEBT_DB_POOL_SIZE",
+            "DEBT_ACCESS_RUN_QUOTA",
+            "DEBT_ACCESS_CODE_TTL",
+            "DEBT_ACCESS_RESULTS_TTL",
+            "DEBT_ACCESS_REQUEST_COOLDOWN",
+            "DEBT_ACCESS_IP_LIMIT",
+            "DEBT_ACCESS_TERMS_VERSION",
+            "DEBT_ACCESS_FRONTEND_URL",
+            "DEBT_MAIL_HOST",
+            "DEBT_MAIL_PORT",
+            "DEBT_MAIL_USERNAME",
+            "DEBT_MAIL_PASSWORD",
+            "DEBT_MAIL_FROM");
 
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {

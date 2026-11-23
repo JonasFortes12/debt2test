@@ -145,6 +145,7 @@ graph TD
     ORCH --> PERSISTENCE
     API --> CORE
     API --> ORCH
+    API --> PERSISTENCE
 ```
 
 Rules:
@@ -156,7 +157,7 @@ Rules:
 5. JSON serialization, CLI arguments, Spring annotations, HTTP clients, Weka, JavaParser, JGit, and dotenv configuration belong outside `debt-core`.
 6. A generated JSON file is an external artifact, not an internal module-to-module API.
 7. No module may reach into another module's `src`, `target`, output directory, or private implementation package.
-8. `debt-api` is a delivery module that depends only on `debt-core` and `debt-orchestrator`. It obtains the pipeline application service from the orchestrator (`AppOrchestrator.createApplication(...)`) and must not depend on `debt-extractor`, `debt-classifier`, `debt-context`, `debt-tester`, or `debt-persistence`. Spring Boot, HTTP DTOs, and the asynchronous launcher (`PipelineRunLauncher`) stay inside `debt-api`; no feature module and no `debt-core` type may depend on it (§13.2).
+8. `debt-api` is a delivery module that depends on `debt-core`, `debt-orchestrator` and `debt-persistence`. It obtains the pipeline application service from the orchestrator (`AppOrchestrator.createApplication(CliOptions, PipelineRunStore, ReportSink)`) and must not depend on `debt-extractor`, `debt-classifier`, `debt-context`, or `debt-tester`. Its `debt-persistence` dependency exists only to boot persistence in its own Spring context and to use the access-code store (`persistence.access`); it must not use pipeline persistence classes except through the `debt-core` ports (§13.3). Spring Boot, HTTP DTOs, and the asynchronous launcher (`PipelineRunLauncher`) stay inside `debt-api`; no feature module and no `debt-core` type may depend on it (§13.2).
 
 ## 6. Module Responsibilities
 
@@ -242,6 +243,8 @@ Recommended internal components:
 - `JiraContextProvider`: Jira adapter.
 - `MockContextProvider`: deterministic tests and offline development.
 
+Each provider also implements the `debt-core` port `ContextSourceConnector` (`JiraSourceConnector` for Jira): it checks a `ContextSource` before a run (`verifyAccess`, returning a typed `ContextAccessCheck` outcome and a host-only message) and builds the run's `ContextEnricher` (`enricherFor`). `JiraClient` works anonymously (no `Authorization` header) for public sites, or with Basic `email:apiToken` for private ones.
+
 ### 6.5 `debt-tester`
 
 The tester turns enriched debt into candidate test code.
@@ -288,7 +291,13 @@ Responsibilities:
 - Sanitize repository URLs before they reach a column, since a row is as durable as a log line.
 
 The module depends only on `debt-core`. It never calls the extractor, classifier, context, or
-tester modules, and no persistence type appears in `debt-core`. Persistence is disabled by
+tester modules, and no persistence type appears in `debt-core`.
+
+It also stores access codes and consent records for `debt-api`, in the isolated package
+`persistence.access` (tables `participant` and `access_code`). That package is storage only, and
+`debt-api` owns the policy. No pipeline class in this module imports it, and it imports no pipeline
+class. Its only link to pipeline data is the foreign key `access_code.execution_id → pipeline_run.id`
+(§13.3). Persistence is disabled by
 default so the CLI and the default build require neither a database nor Docker.
 
 ### 6.8 `debt-api`
@@ -305,10 +314,14 @@ Responsibilities:
 - Translate missing, unfinished, or already-finished runs into typed HTTP errors (`ApiExceptionHandler`, `ApiError`).
 - Own web configuration (CORS, `.env` loading into the Spring environment) and never return secrets in responses.
 
-The module depends only on `debt-core` and `debt-orchestrator`. It contains no domain logic and no
-stage sequencing, and it never calls the extractor, classifier, context, tester, or persistence
-modules directly. It requires `DEBT_PERSISTENCE_ENABLED=true` to start, since its read endpoints
-have no in-memory fallback. See §13.2 for the endpoint contract.
+- Own access codes: the policy (`api.access`), the email senders, the terms of use, and the
+  interceptor that guards `/api/pipeline/**` (§13.3).
+
+The module depends on `debt-core`, `debt-orchestrator` and `debt-persistence`. It contains no
+domain logic and no stage sequencing, and it never calls the extractor, classifier, context or
+tester modules directly. It always boots `debt-persistence` inside its own Spring context (so
+`DEBT_PERSISTENCE_ENABLED` has no effect on it) and does not start without a reachable database. See §13.2 for the
+endpoint contract and §13.3 for access codes.
 
 ## 7. Core Domain Model
 
@@ -481,7 +494,17 @@ The orchestrator owns the sequence and correlation. No stage should invoke the n
 
 ## 10. Context Provider Resolution
 
-`ContextHandler` (in `debt-context`) holds at most one configured `ContextProvider`, injected as `Optional<ContextProvider>`. There is currently no live provider registered by default (`AppOrchestrator` wires `Optional.empty()`), so enrichment resolves every reference to `CONTEXT_NOT_FOUND` until a real provider adapter (e.g. Jira) is registered.
+`ContextHandler` (in `debt-context`) holds at most one configured `ContextProvider`, injected as `Optional<ContextProvider>`. It is built **per run**, not at startup, because the context source (which tracker, which credentials) belongs to the run:
+
+- The source is a `debt-core` `ContextSource` (provider id, base URL, optional `ContextCredentials`). It travels next to the `PipelineRequest`, never inside it, and its `toString()` redacts credentials. `ContextRequest.enabled` is `true` exactly when a source is present; with no source every item is `SKIPPED`.
+- `ContextSources` (in `debt-orchestrator`) is the registry of `ContextSourceConnector`s, keyed by provider id; `AppOrchestrator.contextSources()` registers Jira. `PipelineApplicationService` asks a `ContextEnricherFactory` (`ContextSources::enricherFor`) for the run's enricher inside the context stage, so a failure there is a `CONTEXT_STAGE_FAILED`, not an escaped exception.
+- The REST API takes the source from the request's `context` object; the CLI builds it from `DEBT_CONTEXT_JIRA_*` (base URL alone = public Jira; email and token together = private).
+- Both entry points run `ContextSources.verify(source)` **before** the run is recorded (API: `400`, or `502` when the tracker is unreachable; CLI: exit code `3` before cloning).
+
+Access-check limitations:
+
+- Jira access is per project. The check (`GET /rest/api/2/mypermissions?permissions=BROWSE_PROJECTS`) only answers "can these credentials, or an anonymous user, browse at least one project". An item can still end `FAILED` with `UNAUTHORIZED` if it references a restricted project; that is normal item-level behavior.
+- How a private Jira Cloud site answers an anonymous probe (`401`, a redirect to the login page, or `200` without the permission) has not been verified against live sites. All three map to "authentication required", so any of them gives the intended `400`. If a site behaves differently, the run is accepted and items fail with `UNAUTHORIZED`, as they did before this check existed.
 
 ```mermaid
 sequenceDiagram
@@ -635,8 +658,9 @@ The CLI must not be the owner of domain logic. It should be replaceable by a RES
 
 ### 13.2 REST API (`debt-api`)
 
-The Spring Boot adapter is implemented as its own module, `debt-api`, depending only on
-`debt-core` and `debt-orchestrator`. It exposes:
+The Spring Boot adapter is implemented as its own module, `debt-api`, depending on `debt-core`,
+`debt-orchestrator` and `debt-persistence` (the last one for access codes and to boot persistence
+in its own context, see §13.3). It exposes:
 
 ```http
 POST /api/pipeline/runs
@@ -672,12 +696,92 @@ run-level errors that explain a `FAILED` run. These were deliberate shared-domai
 non-2xx response is an `ApiError { message, fieldErrors[] }`. The Swagger docs are part of the
 contract and are kept complete by `OpenApiDocumentationCompletenessTest` (see `CLAUDE.md`).
 
-`debt-api` requires `DEBT_PERSISTENCE_ENABLED=true` to start, since `GET` endpoints have no
-in-memory fallback to read from.
+`debt-api` always runs with persistence, since `GET` endpoints have no in-memory fallback to read
+from; since API `3.0.0` it needs a reachable database at startup (`DEBT_DB_URL`/`DEBT_DB_USERNAME`/
+`DEBT_DB_PASSWORD`), and every pipeline endpoint needs an access code (§13.3).
+
+Since API `2.0.0`, `POST /api/pipeline/runs` takes an optional `context` object
+(`provider`, `baseUrl`, and for a private Jira `email` + `apiToken` together) instead of the
+removed `contextEnabled` flag. When present, the controller checks the provider is registered and
+calls `ContextSources.verify` synchronously before `allocate`. An unsupported provider, malformed
+URL, unpaired credentials, or a failed access check answers `400`; an unreachable tracker answers
+`502`. In either case no run is recorded. The `ContextSource` is handed to
+`PipelineRunLauncher.submit` and lives only in the queued task. See
+`docs/superpowers/specs/2026-11-06-request-scoped-context-source-design.md`.
 
 Run states are observable without exposing provider credentials. API responses return sanitized
 configuration summaries and report references, not secrets. See
 `docs/superpowers/specs/2026-09-15-rest-api-design.md` for the full design.
+
+### 13.3 Access codes (decision record, API 3.0.0)
+
+**Context.** The server's LLM key pays for every run, the study needs recorded consent to
+versioned terms before anyone uses the tool, and the participants are research data. Accounts,
+passwords and roles are out of scope.
+
+**Decision.**
+
+- A participant posts name, email and the accepted terms version to `POST /api/access/requests`.
+- An email delivers a random single-run code: `D2T-` followed by 7 groups of 4 base32 characters,
+  140 bits. Only its SHA-256 hash is stored.
+- The code goes in `Authorization: Bearer`. Spending it on `POST /api/pipeline/runs` is one
+  conditional `UPDATE`, so two parallel requests can't both start a run. If submitting the run
+  fails, the code is released again.
+- A used code reads, polls and cancels only its own run, for 30 days.
+- Configurable defaults: a code expires after 72 hours unused; each email can start 3 runs, and an
+  operator can raise that per participant. A new request replaces any unused code; there is a
+  5-minute cooldown per email and an hourly limit per IP. `POST /api/access/requests` always
+  answers `202`, so it never reveals whether an email is known.
+- The cooldown counts from the last email of any kind, code or "quota reached" notice, so the
+  server can't be used to flood an inbox.
+- Requests for one email are decided in one transaction that holds the participant row's lock, and
+  the email goes out after commit. A partial unique index allows at most one usable code per
+  participant (migration `V6`).
+- The quota is checked again in the same `UPDATE` that spends a code.
+- If a run is created but can't be linked to its code, it is cancelled, the code is released, and
+  the client gets `503`.
+- Status codes: `401` for a missing, unknown or expired code. `403` when a used code tries to start
+  another run. `404` when the code didn't start that run, the same answer as for an unknown run.
+
+**Placement.**
+
+- Access is a `debt-api` concern only. `debt-core`, the orchestrator's pipeline sequencing and the
+  CLI know nothing about it.
+- The policy lives in `debt-api` (`api.access`). Storage lives in `debt-persistence`
+  (`persistence.access`, migration `V5`), and `debt-api` now depends on `debt-persistence` for it.
+- `debt-api` imports `PersistenceConfiguration` into its own context instead of using the
+  orchestrator's `PersistenceContext`. The orchestrator only gained a port-based overload,
+  `createApplication(CliOptions, PipelineRunStore, ReportSink)`.
+
+**Rejected alternatives.**
+
+- Reaching the store through `debt-orchestrator`: the pipeline's composition root would have to
+  know about access, and the dependency would still exist, only hidden.
+- A separate Postgres schema owned by `debt-api`: the maintainer preferred to keep all persistence
+  in one module.
+- A new `debt-access` module: it remains the planned extraction if access grows, e.g. roles or
+  admin endpoints.
+- Spring Security: the CSRF, session and filter-chain setup isn't needed for a single bearer check.
+
+**Consequences and known limitations.**
+
+- The API fails to start without a database. The CLI still runs when persistence is unavailable.
+- Email aliases (`a+1@`, dots in Gmail addresses) can get around the per-email quota, because
+  addresses are only trimmed and lower-cased.
+- The IP limiter is in memory, so it is correct only for a single instance.
+- With `server.forward-headers-strategy=native`, Tomcat trusts `X-Forwarded-For` from private and
+  loopback addresses. The API must be reachable only through the reverse proxy (or
+  `server.tomcat.remoteip.internal-proxies` must be pinned); otherwise a client on the same network
+  can spoof its IP, getting past the IP limit and forging `consent_ip`.
+- Accepted: anyone who knows a participant's email can revoke that participant's unused code by
+  requesting a new one (at most once per cooldown) and can overwrite the stored name.
+- `debt.api.test.skip-database` is a test-only switch, deliberately undocumented. It lets the
+  Docker-free tests (the Swagger completeness test and the smoke test) start the API without a
+  database. Set in production, the API still fails to start, because the stores are missing.
+- Terms of use are versioned Markdown files in `debt-api` (`terms/terms-<version>.md`).
+  Deleting a participant on request is a manual operator step (see README).
+
+See `docs/superpowers/specs/2026-11-06-access-codes-design.md`.
 
 ## 14. Security and Configuration
 
@@ -688,6 +792,9 @@ configuration summaries and report references, not secrets. See
 - External descriptions and source code are untrusted prompt input. Prompt construction should clearly separate instructions from retrieved content.
 - Generated source code must be treated as untrusted output until validated and reviewed.
 - Provider-specific configuration belongs in adapter configuration, not in shared domain records.
+- Issue-tracker credentials sent in an API request (`context.email`, `context.apiToken`) are held in memory for that run only: they are never fields of `PipelineRequest`, never persisted, logged, or returned, and `ContextSource`/`ContextSourceRequest` redact them in `toString()`.
+- **Accepted risk, reduced but still open:** `context.baseUrl` makes the server send a GET to a caller-chosen URL, and the `400`/`502` distinction reveals whether that host is reachable from the server (server-side request forgery). Since API 3.0.0 only a holder of an unused access code (one email-verified participant, one run) can trigger it. A host allowlist, blocking of private and loopback addresses, and `https`-only URLs are still to do.
+- Access codes are stored only as SHA-256 hashes. Logs never contain a code, its hash, or an unmasked email; the one exception is the development mail sender, which prints codes when no `DEBT_MAIL_HOST` is set and logs a warning that it is active.
 
 ## 15. Testing Strategy
 

@@ -2,6 +2,7 @@ package io.github.jonasfortes12.api.dto;
 
 import io.github.jonasfortes12.core.model.TestGenerationOptions;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 
 @Schema(description = "What to analyse and how. Unknown fields are ignored.")
@@ -14,9 +15,10 @@ public record CreateRunRequest(
                                 + "repository's default branch HEAD is used. An unknown revision does not fail this "
                                 + "request: the run ends FAILED with a run-level error.", nullable = true, example = "main") String revision,
 
-                @Schema(description = "Look up issue-tracker context for each SATD item. When false, every "
-                                + "item's contextStatus is SKIPPED. When true, Jira is queried if the server has the "
-                                + "DEBT_CONTEXT_JIRA_* variables configured; otherwise items resolve to NOT_FOUND.", defaultValue = "false") boolean contextEnabled,
+                @Schema(description = "Issue tracker to read context from for each SATD item. Omit it (or send "
+                                + "null) to skip context: every item's contextStatus is then SKIPPED. Replaces the "
+                                + "contextEnabled flag removed in API 2.0.0; a contextEnabled field is now ignored.",
+                                nullable = true) @Valid ContextSourceRequest context,
 
                 @Schema(description = "If a DebtHunter Weka model cannot load or predict, classify with a "
                                 + "keyword heuristic instead of recording a classification error on the item.", defaultValue = "false") boolean allowHeuristicFallback,

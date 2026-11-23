@@ -65,7 +65,7 @@ public class LlmProviderAdapterTest {
             assertEquals("@Test void anthropic() {}", provider.generateTest(prompt()));
             JsonObject request = server.requestJson();
             assertEquals("claude-test", request.get("model").getAsString());
-            assertEquals(2048, request.get("max_tokens").getAsInt());
+            assertEquals(8192, request.get("max_tokens").getAsInt());
             assertTrue(request.get("system").getAsString().contains("JUnit 5"));
             assertTrue(request.getAsJsonArray("messages").get(0).getAsJsonObject()
                     .get("content").getAsString().contains("Description: Description"));
@@ -82,6 +82,14 @@ public class LlmProviderAdapterTest {
         assertResponse(new AnthropicProviderFactory(),
                 "{\"content\":[{\"text\":\"  @Test void plain() {}  \"}]}",
                 "@Test void plain() {}");
+    }
+
+    @Test
+    void anthropicSkipsLeadingThinkingBlock() throws Exception {
+        assertResponse(new AnthropicProviderFactory(),
+                "{\"content\":[{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"sig\"},"
+                        + "{\"type\":\"text\",\"text\":\"@Test void afterThinking() {}\"}]}",
+                "@Test void afterThinking() {}");
     }
 
     @Test

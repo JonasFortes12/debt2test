@@ -94,7 +94,7 @@ class WekaDebtHunterClassifierTest {
     void modelUsesBundledClassOrdersConfidenceAndProvenance() throws Exception {
         WekaDebtHunterClassifier classifier = classifierWithModels(
                 new StubClassifier(0.0, new double[]{0.2, 0.8}, false),
-                new StubClassifier(3.0, new double[]{0.1, 0.2, 0.15, 0.45, 0.1}, false));
+                new StubClassifier(1.0, new double[]{0.1, 0.45, 0.15, 0.2, 0.1}, false));
 
         ClassificationResult result = classifier.classify(
                 List.of(candidate("candidate-model", "ordinary comment")),
@@ -193,6 +193,29 @@ class WekaDebtHunterClassifierTest {
 
         assertEquals(100, result.classifications().size());
         assertEquals(1, ObservingClassifier.maximumObservedCommentValues());
+    }
+
+    @Test
+    void bundledDebtHunterModelsLoadAndPredictWithoutHeuristicFallback() {
+        Path models = Path.of("..", "preTrainedModels");
+        WekaDebtHunterClassifier classifier = new WekaDebtHunterClassifier(
+                models.resolve("DHbinaryClassifier.model").toString(),
+                models.resolve("DHmultiClassifier.model").toString());
+
+        // Fallback disabled: any load or prediction failure yields no classification.
+        ClassificationResult result = classifier.classify(
+                List.of(candidate("candidate-real-satd", "TODO: this is a hack, refactor this ugly workaround later"),
+                        candidate("candidate-real-plain", "Returns the number of elements in this list")),
+                new ClassificationOptions(false));
+
+        assertTrue(result.errors().isEmpty(), () -> "errors: " + result.errors());
+        assertEquals(2, result.classifications().size());
+        result.classifications().forEach(debt -> assertEquals("model", debt.provenance().strategy()));
+
+        ClassifiedDebt satd = result.classifications().get(0);
+        assertTrue(satd.satd());
+        assertEquals("DESIGN", satd.debtType()); // guards DEBT_TYPE_VALUES against the model's class order
+        assertFalse(result.classifications().get(1).satd());
     }
 
     private static WekaDebtHunterClassifier fallbackClassifier() {

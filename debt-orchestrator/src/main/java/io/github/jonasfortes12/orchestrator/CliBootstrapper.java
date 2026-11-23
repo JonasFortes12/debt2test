@@ -4,6 +4,8 @@ import java.util.Optional;
 import java.util.function.UnaryOperator;
 
 import io.github.cdimascio.dotenv.Dotenv;
+import io.github.jonasfortes12.context.provider.jira.JiraConfig;
+import io.github.jonasfortes12.core.context.ContextSource;
 import io.github.jonasfortes12.orchestrator.application.PipelineApplicationService;
 import io.github.jonasfortes12.orchestrator.persistence.PersistenceContext;
 import io.github.jonasfortes12.tester.LlmConfig;
@@ -15,11 +17,13 @@ public final class CliBootstrapper {
 
     public static BootstrappedPipeline bootstrap(String[] args) {
         AppOrchestrator.CliOptions options = AppOrchestrator.parseArguments(args);
+        Optional<ContextSource> contextSource = new JiraConfig().toContextSource();
         LlmConfig llmConfig = new LlmConfig();
         Optional<PersistenceContext> persistence = PersistenceContext.openIfEnabled(environment());
         PipelineApplicationService application =
                 AppOrchestrator.createApplication(options, llmConfig, persistence);
-        return new BootstrappedPipeline(options, application, persistence);
+        return new BootstrappedPipeline(
+                options, application, persistence, contextSource, AppOrchestrator.contextSources());
     }
 
     /**

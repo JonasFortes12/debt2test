@@ -11,7 +11,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.TestPropertySource;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -29,12 +28,7 @@ import com.google.gson.JsonParser;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
-@TestPropertySource(properties = {
-        "DEBT_PERSISTENCE_ENABLED=true",
-        "DEBT_DB_URL=jdbc:postgresql://localhost:1/unreachable-test-db",
-        "DEBT_DB_USERNAME=test",
-        "DEBT_DB_PASSWORD=test"
-})
+@NoDatabaseTestSupport
 class OpenApiDocumentationCompletenessTest {
 
     private static final String API_ERROR_REF = "#/components/schemas/ApiError";
@@ -44,8 +38,11 @@ class OpenApiDocumentationCompletenessTest {
      * documenting it.
      */
     private static final List<String> EXPECTED_OPERATIONS = List.of(
+            "GET /api/access/code",
+            "GET /api/access/terms",
             "GET /api/pipeline/runs/{executionId}",
             "GET /api/pipeline/runs/{executionId}/report",
+            "POST /api/access/requests",
             "POST /api/pipeline/runs",
             "POST /api/pipeline/runs/{executionId}/cancel");
 
@@ -94,6 +91,30 @@ class OpenApiDocumentationCompletenessTest {
         }
 
         assertEquals(List.of(), missing);
+    }
+
+    @Test
+    void pipelineOperationsRequireTheAccessCodeAndDocument401() {
+        JsonObject spec = JsonParser.parseString(
+                restTemplate.getForEntity("/v3/api-docs", String.class).getBody()).getAsJsonObject();
+        assertEquals("bearer", spec.getAsJsonObject("components").getAsJsonObject("securitySchemes")
+                .getAsJsonObject("accessCode").get("scheme").getAsString());
+        List<String> missing = new ArrayList<>();
+        for (Map.Entry<String, JsonElement> path : spec.getAsJsonObject("paths").entrySet()) {
+            boolean guarded = path.getKey().startsWith("/api/pipeline/") || path.getKey().equals("/api/access/code");
+            for (Map.Entry<String, JsonElement> operation : path.getValue().getAsJsonObject().entrySet()) {
+                JsonObject op = operation.getValue().getAsJsonObject();
+                String name = operation.getKey().toUpperCase() + " " + path.getKey();
+                if (guarded && !(op.has("security") && op.getAsJsonObject("responses").has("401"))) {
+                    missing.add(name);
+                }
+                if (!guarded && op.has("security")) {
+                    missing.add(name + " (must not require a code)");
+                }
+            }
+        }
+        assertEquals(List.of(), missing);
+        assertEquals("3.0.0", spec.getAsJsonObject("info").get("version").getAsString());
     }
 
     /**

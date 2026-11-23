@@ -4,17 +4,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Base64;
 
 import org.junit.jupiter.api.Test;
 
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
+import io.github.jonasfortes12.core.context.ContextAccessCheck.Outcome;
+
 
 class JiraClientTest {
 
@@ -113,44 +116,139 @@ class JiraClientTest {
         }
     }
 
-    private static final class FakeJiraServer implements AutoCloseable {
-        private final HttpServer server;
-        private final int status;
-        private final String response;
-        private volatile HttpExchange exchange;
-
-        private FakeJiraServer(int status, String response) throws IOException {
-            this.status = status;
-            this.response = response;
-            this.server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-            this.server.createContext("/", this::handle);
-            this.server.start();
+    @Test
+    void checkAccessIsOkWhenBrowsePermitted() throws Exception {
+        try (FakeJiraServer server = new FakeJiraServer(200, permissionBody(true))) {
+            assertEquals(Outcome.OK, new JiraClient(server.endpoint()).checkAccess());
+            assertEquals("/rest/api/2/mypermissions", server.requestPath());
+            assertEquals("permissions=BROWSE_PROJECTS", server.query());
+            assertNull(server.header("Authorization"));
         }
+    }
 
-        private void handle(HttpExchange exchange) throws IOException {
-            this.exchange = exchange;
-            byte[] body = response.getBytes(StandardCharsets.UTF_8);
-            exchange.sendResponseHeaders(status, body.length);
-            try (OutputStream output = exchange.getResponseBody()) {
-                output.write(body);
-            }
+    @Test
+    void anonymousWithoutBrowsePermissionNeedsAuth() throws Exception {
+        assertAnonymous(200, permissionBody(false), Outcome.AUTH_REQUIRED);
+    }
+
+    @Test
+    void authenticatedWithoutBrowsePermissionHasNoProjectAccess() throws Exception {
+        assertAuthenticated(200, permissionBody(false), Outcome.NO_PROJECT_ACCESS);
+    }
+
+    @Test
+    void anonymous401NeedsAuth() throws Exception {
+        assertAnonymous(401, "{}", Outcome.AUTH_REQUIRED);
+        assertAnonymous(403, "{}", Outcome.AUTH_REQUIRED);
+    }
+
+    @Test
+    void authenticated401IsRejected() throws Exception {
+        assertAuthenticated(401, "{}", Outcome.CREDENTIALS_REJECTED);
+        assertAuthenticated(403, "{}", Outcome.CREDENTIALS_REJECTED);
+    }
+
+    @Test
+    void anonymousRedirectNeedsAuth() throws Exception {
+        assertAnonymous(302, "", Outcome.AUTH_REQUIRED);
+    }
+
+    @Test
+    void authenticatedRedirectIsNotASource() throws Exception {
+        assertAuthenticated(302, "", Outcome.NOT_A_SOURCE);
+    }
+
+    @Test
+    void notFoundIsNotASource() throws Exception {
+        assertAnonymous(404, "<html>", Outcome.NOT_A_SOURCE);
+        assertAuthenticated(404, "<html>", Outcome.NOT_A_SOURCE);
+    }
+
+    @Test
+    void rateLimitedIsUnreachable() throws Exception {
+        assertAnonymous(429, "{}", Outcome.UNREACHABLE);
+    }
+
+    @Test
+    void serverErrorIsUnreachable() throws Exception {
+        assertAnonymous(503, "{}", Outcome.UNREACHABLE);
+    }
+
+    @Test
+    void malformedBodyIsUnreachable() throws Exception {
+        assertAnonymous(200, "not json", Outcome.UNREACHABLE);
+        assertAnonymous(200, "{\"permissions\":{}}", Outcome.UNREACHABLE);
+    }
+
+    @Test
+    void closedPortIsUnreachable() throws Exception {
+        String endpoint;
+        try (FakeJiraServer server = new FakeJiraServer(200, "{}")) {
+            endpoint = server.endpoint();
         }
+        assertEquals(Outcome.UNREACHABLE, new JiraClient(endpoint).checkAccess());
+    }
 
-        private String endpoint() {
-            return "http://localhost:" + server.getAddress().getPort();
+    @Test
+    void anonymousGetIssueSendsNoAuthorizationHeader() throws Exception {
+        try (FakeJiraServer server = new FakeJiraServer(200,
+                "{\"key\":\"OPS-1\",\"fields\":{\"summary\":\"s\",\"status\":{\"name\":\"Done\"}}}")) {
+            new JiraClient(server.endpoint()).getIssue("OPS-1");
+            assertNull(server.header("Authorization"));
         }
+    }
 
-        private String requestPath() {
-            return exchange.getRequestURI().getPath();
+    @Test
+    void authenticatedCheckSendsBasicAuth() throws Exception {
+        try (FakeJiraServer server = new FakeJiraServer(200, permissionBody(true))) {
+            new JiraClient(server.endpoint(), "e@x.com", "api-token").checkAccess();
+            String expectedAuth = "Basic " + Base64.getEncoder()
+                    .encodeToString("e@x.com:api-token".getBytes(StandardCharsets.UTF_8));
+            assertEquals(expectedAuth, server.header("Authorization"));
         }
+    }
 
-        private String header(String name) {
-            return exchange.getRequestHeaders().getFirst(name);
+    @Test
+    void stalledBodyIsUnreachableWithinTheCheckTimeout() throws Exception {
+        try (ServerSocket server = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+            Thread stalling = Thread.ofVirtual().start(() -> sendHeadersThenStall(server));
+            long started = System.nanoTime();
+
+            Outcome outcome = new JiraClient("http://localhost:" + server.getLocalPort()).checkAccess();
+
+            long elapsedSeconds = Duration.ofNanos(System.nanoTime() - started).toSeconds();
+            assertEquals(Outcome.UNREACHABLE, outcome);
+            assertTrue(elapsedSeconds < 8, "check must give up after its timeout, took " + elapsedSeconds + " s");
+            stalling.interrupt();
         }
+    }
 
-        @Override
-        public void close() {
-            server.stop(0);
+    /** Answers 200 with a promised 100-byte body, then never sends it. */
+    private static void sendHeadersThenStall(ServerSocket server) {
+        try (Socket client = server.accept()) {
+            client.getOutputStream().write(
+                    "HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
+            client.getOutputStream().flush();
+            Thread.sleep(Duration.ofSeconds(30));
+        } catch (IOException | InterruptedException ignored) {
+            // test finished or server closed
+        }
+    }
+
+    private static String permissionBody(boolean havePermission) {
+        return "{\"permissions\":{\"BROWSE_PROJECTS\":{\"key\":\"BROWSE_PROJECTS\",\"havePermission\":"
+                + havePermission + "}}}";
+    }
+
+    private static void assertAnonymous(int status, String body, Outcome expected) throws Exception {
+        try (FakeJiraServer server = new FakeJiraServer(status, body)) {
+            assertEquals(expected, new JiraClient(server.endpoint()).checkAccess());
+        }
+    }
+
+    private static void assertAuthenticated(int status, String body, Outcome expected) throws Exception {
+        try (FakeJiraServer server = new FakeJiraServer(status, body)) {
+            assertEquals(expected, new JiraClient(server.endpoint(), "e@x.com", "token").checkAccess());
         }
     }
 }

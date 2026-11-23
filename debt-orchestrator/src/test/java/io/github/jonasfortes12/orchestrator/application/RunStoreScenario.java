@@ -64,7 +64,7 @@ final class RunStoreScenario {
                 workspaceProvider(),
                 extractor(),
                 classifier(),
-                enricher(),
+                ContextEnricherFactory.fixed(enricher()),
                 generator(),
                 new FileReportSink(),
                 (request, workspace) -> request.runId(),

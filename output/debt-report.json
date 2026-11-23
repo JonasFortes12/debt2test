@@ -1,312 +1,290 @@
-{
-  "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
-  "status": "FAILED",
-  "errors": [
-    {
-      "stage": "extraction",
-      "code": "JAVA_PARSE_FAILED",
-      "candidateId": null,
-      "recoverable": true,
-      "message": "pipeline error recorded"
+[
+  {
+    "filePath": "src/main/java/io/github/jonasfortes12/samples/debt/auth/LoginService.java",
+    "methodName": "authenticate",
+    "lineNumber": 9,
+    "comment": "* TODO DEBT2TEST-1: refactor this; legacy MD5 hashing is an ugly workaround and\n     * password hashing should be redesigned around bcrypt (workFactor\u003d12) or Argon2.",
+    "methodSourceCode": "/**\n * TODO DEBT2TEST-1: refactor this; legacy MD5 hashing is an ugly workaround and\n * password hashing should be redesigned around bcrypt (workFactor\u003d12) or Argon2.\n */\npublic boolean authenticate(String username, String password) {\n    if (username \u003d\u003d null || username.isEmpty()) {\n        return false;\n    }\n    String passwordHash \u003d legacyMd5Hash(password);\n    return validateHash(username, passwordHash);\n}",
+    "isSatd": true,
+    "debtType": "DESIGN",
+    "confidence": 0.4,
+    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/main/java/io/github/jonasfortes12/samples/debt/auth/LoginService.java:9:5:authenticate:LoginService:authenticate(String, String)",
+    "contextStatus": "MATCHED",
+    "issueReferences": [
+      {
+        "value": "DEBT2TEST-1",
+        "source": "comment"
+      }
+    ],
+    "externalTask": {
+      "provider": "jira",
+      "key": "DEBT2TEST-1",
+      "summary": "Migrate MD5 to bcrypt",
+      "description": "Authentication currently hashes passwords with MD5, which is cryptographically broken and unsuitable for password storage.\n\n*Debt context (SATD):* {{LoginService.authenticate()}} — comment flags this as legacy code from 2015 with ~15% performance overhead on login attempts.\n\n*Acceptance Criteria:*\n\n* Replace {{legacyMd5Hash}} with bcrypt (workFactor\u003d12) or Argon2.\n* Existing stored hashes are migrated or re-hashed on next successful login.\n* Unit tests cover authentication with the new hashing scheme.",
+      "acceptanceCriteria": [],
+      "labels": [],
+      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-1"
     },
-    {
-      "stage": "classification",
-      "code": "CLASSIFIER_MODEL_FALLBACK",
-      "candidateId": null,
-      "recoverable": true,
-      "message": "pipeline error recorded"
+    "classificationProvenance": {
+      "provider": "DebtHunter",
+      "strategy": "model",
+      "version": "configured"
     },
-    {
-      "stage": "generation",
-      "code": "LLM_RESPONSE_INVALID",
-      "candidateId": null,
-      "recoverable": false,
-      "message": "pipeline error recorded"
+    "errors": [],
+    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
+    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
+    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
+  },
+  {
+    "filePath": "src/main/java/io/github/jonasfortes12/samples/debt/database/OrderRepository.java",
+    "methodName": "findOrdersForCustomers",
+    "lineNumber": 12,
+    "comment": "TODO DEBT2TEST-7: refactor this; one query per customer is an ugly workaround (N+1)\nand should be redesigned as a single batched IN (...) query.",
+    "methodSourceCode": "// TODO DEBT2TEST-7: refactor this; one query per customer is an ugly workaround (N+1)\n// and should be redesigned as a single batched IN (...) query.\npublic List\u003cString\u003e findOrdersForCustomers(List\u003cString\u003e customerIds) {\n    List\u003cString\u003e orders \u003d new ArrayList\u003c\u003e();\n    for (String customerId : customerIds) {\n        orders.addAll(findOrdersByCustomer(customerId));\n    }\n    return orders;\n}",
+    "isSatd": true,
+    "debtType": "DESIGN",
+    "confidence": 0.4,
+    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/main/java/io/github/jonasfortes12/samples/debt/database/OrderRepository.java:12:5:findOrdersForCustomers:OrderRepository:findOrdersForCustomers(List)",
+    "contextStatus": "MATCHED",
+    "issueReferences": [
+      {
+        "value": "DEBT2TEST-7",
+        "source": "comment"
+      }
+    ],
+    "externalTask": {
+      "provider": "jira",
+      "key": "DEBT2TEST-7",
+      "summary": "Batch OrderRepository customer lookups to remove N+1 queries",
+      "description": "OrderRepository.findOrdersForCustomers() loops over customer IDs and issues one simulated query per customer instead of a single batched lookup, causing an N+1 query pattern.\n\nDebt context (SATD): OrderRepository — TODO comment notes this was written for a single-customer admin screen and was never revisited when the bulk \"customer orders export\" feature reused it, where it now issues hundreds of queries per export.\n\nAcceptance Criteria:\n\n* Replace the per-ID loop with a single batched query (e.g., WHERE customer_id IN (...)).\n* findOrdersForCustomers() issues one query regardless of input size.\n* Test covers a multi-customer call and asserts the query/call count.",
+      "acceptanceCriteria": [],
+      "labels": [],
+      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-7"
     },
-    {
-      "stage": "generation",
-      "code": "LLM_TRANSPORT_FAILED",
-      "candidateId": null,
-      "recoverable": true,
-      "message": "pipeline error recorded"
-    }
-  ],
-  "items": [
-    {
-      "filePath": "src/main/java/io/github/jonasfortes12/samples/debt/auth/LoginService.java",
-      "methodName": "authenticate",
-      "lineNumber": 14,
-      "comment": "* TODO: DEBT2TEST-1\n     * This authentication mechanism uses MD5 hashing which is deprecated.\n     * MD5 is cryptographically broken and should not be used for password hashing.\n     * Migration target: bcrypt with workFactor\u003d12 or Argon2.\n     *\n     * Legacy code from 2015. Performance impact: ~15% slower on login attempts.\n     * Blocks user experience improvements until resolved.",
-      "methodSourceCode": "/**\n * TODO: DEBT2TEST-1\n * This authentication mechanism uses MD5 hashing which is deprecated.\n * MD5 is cryptographically broken and should not be used for password hashing.\n * Migration target: bcrypt with workFactor\u003d12 or Argon2.\n *\n * Legacy code from 2015. Performance impact: ~15% slower on login attempts.\n * Blocks user experience improvements until resolved.\n */\npublic boolean authenticate(String username, String password) {\n    if (username \u003d\u003d null || username.isEmpty()) {\n        return false;\n    }\n    String passwordHash \u003d legacyMd5Hash(password);\n    return validateHash(username, passwordHash);\n}",
-      "isSatd": true,
-      "debtType": "TEST",
-      "confidence": null,
-      "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/main/java/io/github/jonasfortes12/samples/debt/auth/LoginService.java:14:5:authenticate:LoginService:authenticate(String, String)",
-      "contextStatus": "MATCHED",
-      "issueReferences": [
-        {
-          "value": "DEBT2TEST-1",
-          "source": "comment"
-        }
-      ],
-      "externalTask": {
-        "provider": "jira",
-        "key": "DEBT2TEST-1",
-        "summary": "Migrate MD5 to bcrypt",
-        "description": "Authentication currently hashes passwords with MD5, which is cryptographically broken and unsuitable for password storage.\n\n*Debt context (SATD):* {{LoginService.authenticate()}} — comment flags this as legacy code from 2015 with ~15% performance overhead on login attempts.\n\n*Acceptance Criteria:*\n\n* Replace {{legacyMd5Hash}} with bcrypt (workFactor\u003d12) or Argon2.\n* Existing stored hashes are migrated or re-hashed on next successful login.\n* Unit tests cover authentication with the new hashing scheme.",
-        "acceptanceCriteria": [],
-        "labels": [],
-        "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-1"
-      },
-      "classificationProvenance": {
-        "provider": "DebtHunter",
-        "strategy": "heuristic-fallback",
-        "version": "unavailable"
-      },
-      "errors": [],
-      "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
-      "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-      "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
+    "classificationProvenance": {
+      "provider": "DebtHunter",
+      "strategy": "model",
+      "version": "configured"
     },
-    {
-      "filePath": "src/main/java/io/github/jonasfortes12/samples/debt/database/OrderRepository.java",
-      "methodName": "findOrdersForCustomers",
-      "lineNumber": 15,
-      "comment": "TODO: DEBT2TEST-7\nWritten for a single-customer admin screen; issues one simulated query\nper customer ID. Never revisited when the bulk \"customer orders export\"\nfeature reused this method, where it now fires hundreds of queries\nper export (N+1). Should be a single batched IN (...) query.",
-      "methodSourceCode": "// TODO: DEBT2TEST-7\n// Written for a single-customer admin screen; issues one simulated query\n// per customer ID. Never revisited when the bulk \"customer orders export\"\n// feature reused this method, where it now fires hundreds of queries\n// per export (N+1). Should be a single batched IN (...) query.\npublic List\u003cString\u003e findOrdersForCustomers(List\u003cString\u003e customerIds) {\n    List\u003cString\u003e orders \u003d new ArrayList\u003c\u003e();\n    for (String customerId : customerIds) {\n        orders.addAll(findOrdersByCustomer(customerId));\n    }\n    return orders;\n}",
-      "isSatd": true,
-      "debtType": "TEST",
-      "confidence": null,
-      "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/main/java/io/github/jonasfortes12/samples/debt/database/OrderRepository.java:15:5:findOrdersForCustomers:OrderRepository:findOrdersForCustomers(List)",
-      "contextStatus": "MATCHED",
-      "issueReferences": [
-        {
-          "value": "DEBT2TEST-7",
-          "source": "comment"
-        }
-      ],
-      "externalTask": {
-        "provider": "jira",
-        "key": "DEBT2TEST-7",
-        "summary": "Batch OrderRepository customer lookups to remove N+1 queries",
-        "description": "OrderRepository.findOrdersForCustomers() loops over customer IDs and issues one simulated query per customer instead of a single batched lookup, causing an N+1 query pattern.\n\nDebt context (SATD): OrderRepository — TODO comment notes this was written for a single-customer admin screen and was never revisited when the bulk \"customer orders export\" feature reused it, where it now issues hundreds of queries per export.\n\nAcceptance Criteria:\n\n* Replace the per-ID loop with a single batched query (e.g., WHERE customer_id IN (...)).\n* findOrdersForCustomers() issues one query regardless of input size.\n* Test covers a multi-customer call and asserts the query/call count.",
-        "acceptanceCriteria": [],
-        "labels": [],
-        "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-7"
-      },
-      "classificationProvenance": {
-        "provider": "DebtHunter",
-        "strategy": "heuristic-fallback",
-        "version": "unavailable"
-      },
-      "errors": [],
-      "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
-      "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-      "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
+    "errors": [],
+    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
+    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
+    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
+  },
+  {
+    "filePath": "src/main/java/io/github/jonasfortes12/samples/debt/logging/AuditLogger.java",
+    "methodName": "logRequest",
+    "lineNumber": 14,
+    "comment": "* FIXME DEBT2TEST-6: bug, logged entries contain the raw password and card number in plaintext.\n     * The request is logged via toString() with no redaction step.",
+    "methodSourceCode": "/**\n * FIXME DEBT2TEST-6: bug, logged entries contain the raw password and card number in plaintext.\n * The request is logged via toString() with no redaction step.\n */\npublic void logRequest(Request request) {\n    sink.add(request.toString());\n}",
+    "isSatd": true,
+    "debtType": "DESIGN",
+    "confidence": 0.4,
+    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/main/java/io/github/jonasfortes12/samples/debt/logging/AuditLogger.java:14:5:logRequest:AuditLogger:logRequest(Request)",
+    "contextStatus": "MATCHED",
+    "issueReferences": [
+      {
+        "value": "DEBT2TEST-6",
+        "source": "comment"
+      }
+    ],
+    "externalTask": {
+      "provider": "jira",
+      "key": "DEBT2TEST-6",
+      "summary": "Redact sensitive data from audit logs",
+      "description": "AuditLogger.logRequest() writes full request objects to the log via toString(), including raw passwords and credit card numbers, in plaintext.\n\nDebt context (SATD): AuditLogger — FIXME comment flags this as a compliance risk (PCI-DSS/GDPR) introduced during the 2023 audit-trail rollout, since logs are shipped to a third-party aggregator.\n\nAcceptance Criteria:\n\n* Introduce a redaction step (field allowlist or masking) before any object is logged.\n* Sensitive fields (password, cardNumber, ssn, etc.) never reach the log sink in plaintext.\n* Unit test asserts logged output does not contain raw sensitive values.",
+      "acceptanceCriteria": [],
+      "labels": [],
+      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-6"
     },
-    {
-      "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/cache/CacheManagerTest.java",
-      "methodName": "shouldReportCorrectSize",
-      "lineNumber": 36,
-      "comment": "DEBT2TEST-4: no test covers eviction under memory pressure because the\ncache has no eviction policy or maxSize limit yet.",
-      "methodSourceCode": "// DEBT2TEST-4: no test covers eviction under memory pressure because the\n// cache has no eviction policy or maxSize limit yet.\n@Test\nvoid shouldReportCorrectSize() {\n    cacheManager.put(\"a\", 1);\n    cacheManager.put(\"b\", 2);\n    assertEquals(2, cacheManager.size());\n}",
-      "isSatd": true,
-      "debtType": "TEST",
-      "confidence": null,
-      "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/cache/CacheManagerTest.java:36:5:shouldReportCorrectSize:CacheManagerTest:shouldReportCorrectSize()",
-      "contextStatus": "MATCHED",
-      "issueReferences": [
-        {
-          "value": "DEBT2TEST-4",
-          "source": "comment"
-        }
-      ],
-      "externalTask": {
-        "provider": "jira",
-        "key": "DEBT2TEST-4",
-        "summary": "Implement bounded LRU cache",
-        "description": "{{CacheManager}} uses an unbounded {{HashMap}} with no eviction policy, risking {{OutOfMemoryError}} in production. Reported by DevOps after an incident on 2024-01-15.\n\n*Debt context (SATD):* {{CacheManager}} — TODO comment calls for an LRU cache with a max size limit.\n\n*Acceptance Criteria:*\n\n* Replace the unbounded {{HashMap}} with a bounded LRU cache (e.g., {{LinkedHashMap}} in access-order mode, or a dedicated LRU structure).\n* Cache exposes a configurable {{maxSize}}.\n* Unit tests confirm eviction occurs once {{maxSize}} is exceeded.",
-        "acceptanceCriteria": [],
-        "labels": [],
-        "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-4"
-      },
-      "classificationProvenance": {
-        "provider": "DebtHunter",
-        "strategy": "heuristic-fallback",
-        "version": "unavailable"
-      },
-      "errors": [],
-      "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
-      "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-      "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
+    "classificationProvenance": {
+      "provider": "DebtHunter",
+      "strategy": "model",
+      "version": "configured"
     },
-    {
-      "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/database/ConnectionPoolTest.java",
-      "methodName": "shouldNotExceedPoolSizeOnRelease",
-      "lineNumber": 32,
-      "comment": "DEBT2TEST-3: concurrent access isn\u0027t exercised here because the pool\nlacks synchronization; a true concurrency test would be flaky by design.",
-      "methodSourceCode": "// DEBT2TEST-3: concurrent access isn\u0027t exercised here because the pool\n// lacks synchronization; a true concurrency test would be flaky by design.\n@Test\nvoid shouldNotExceedPoolSizeOnRelease() throws InterruptedException {\n    ConnectionPool.DbConnection conn \u003d connectionPool.getConnection();\n    connectionPool.releaseConnection(conn);\n    connectionPool.releaseConnection(conn);\n    assertTrue(true);\n}",
-      "isSatd": true,
-      "debtType": "TEST",
-      "confidence": null,
-      "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/database/ConnectionPoolTest.java:32:5:shouldNotExceedPoolSizeOnRelease:ConnectionPoolTest:shouldNotExceedPoolSizeOnRelease()",
-      "contextStatus": "MATCHED",
-      "issueReferences": [
-        {
-          "value": "DEBT2TEST-3",
-          "source": "comment"
-        }
-      ],
-      "externalTask": {
-        "provider": "jira",
-        "key": "DEBT2TEST-3",
-        "summary": "Fix ConnectionPool race condition",
-        "description": "{{ConnectionPool.getConnection()}} and {{releaseConnection()}} access the shared {{availableConnections}} queue without synchronization, risking duplicate leases, lost connections, and pool exhaustion under load.\n\n*Debt context (SATD):* {{ConnectionPool}} — BUG comment blocks deployment to high-concurrency environments (10k+ RPS).\n\n*Acceptance Criteria:*\n\n* Replace {{LinkedList}} with {{ConcurrentLinkedQueue}}, or add proper synchronization around both methods.\n* Add a concurrency test that exercises concurrent {{getConnection}}/{{releaseConnection}} calls without lost or duplicated connections.",
-        "acceptanceCriteria": [],
-        "labels": [],
-        "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-3"
-      },
-      "classificationProvenance": {
-        "provider": "DebtHunter",
-        "strategy": "heuristic-fallback",
-        "version": "unavailable"
-      },
-      "errors": [
-        {
-          "stage": "generation",
-          "code": "LLM_RESPONSE_INVALID",
-          "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/database/ConnectionPoolTest.java:32:5:shouldNotExceedPoolSizeOnRelease:ConnectionPoolTest:shouldNotExceedPoolSizeOnRelease()",
-          "recoverable": false,
-          "message": "pipeline error recorded"
-        }
-      ],
-      "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
-      "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-      "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
+    "errors": [],
+    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
+    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
+    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
+  },
+  {
+    "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/cache/CacheManagerTest.java",
+    "methodName": "shouldReportCorrectSize",
+    "lineNumber": 36,
+    "comment": "TODO DEBT2TEST-4: add tests, no test covers eviction under memory pressure because\nthe cache has no eviction policy or maxSize limit yet.",
+    "methodSourceCode": "// TODO DEBT2TEST-4: add tests, no test covers eviction under memory pressure because\n// the cache has no eviction policy or maxSize limit yet.\n@Test\nvoid shouldReportCorrectSize() {\n    cacheManager.put(\"a\", 1);\n    cacheManager.put(\"b\", 2);\n    assertEquals(2, cacheManager.size());\n}",
+    "isSatd": true,
+    "debtType": "TEST",
+    "confidence": 0.4,
+    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/test/java/io/github/jonasfortes12/samples/debt/cache/CacheManagerTest.java:36:5:shouldReportCorrectSize:CacheManagerTest:shouldReportCorrectSize()",
+    "contextStatus": "MATCHED",
+    "issueReferences": [
+      {
+        "value": "DEBT2TEST-4",
+        "source": "comment"
+      }
+    ],
+    "externalTask": {
+      "provider": "jira",
+      "key": "DEBT2TEST-4",
+      "summary": "Implement bounded LRU cache",
+      "description": "{{CacheManager}} uses an unbounded {{HashMap}} with no eviction policy, risking {{OutOfMemoryError}} in production. Reported by DevOps after an incident on 2024-01-15.\n\n*Debt context (SATD):* {{CacheManager}} — TODO comment calls for an LRU cache with a max size limit.\n\n*Acceptance Criteria:*\n\n* Replace the unbounded {{HashMap}} with a bounded LRU cache (e.g., {{LinkedHashMap}} in access-order mode, or a dedicated LRU structure).\n* Cache exposes a configurable {{maxSize}}.\n* Unit tests confirm eviction occurs once {{maxSize}} is exceeded.",
+      "acceptanceCriteria": [],
+      "labels": [],
+      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-4"
     },
-    {
-      "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/database/OrderRepositoryTest.java",
-      "methodName": "currentlyIssuesOneQueryPerCustomer",
-      "lineNumber": 25,
-      "comment": "DEBT2TEST-7: one query is issued per customer ID instead of a single\nbatched lookup, so the query count scales linearly with input size.",
-      "methodSourceCode": "// DEBT2TEST-7: one query is issued per customer ID instead of a single\n// batched lookup, so the query count scales linearly with input size.\n@Test\nvoid currentlyIssuesOneQueryPerCustomer() {\n    orderRepository.findOrdersForCustomers(List.of(\"c1\", \"c2\", \"c3\"));\n    assertEquals(3, orderRepository.getQueryCount());\n}",
-      "isSatd": true,
-      "debtType": "TEST",
-      "confidence": null,
-      "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/database/OrderRepositoryTest.java:25:5:currentlyIssuesOneQueryPerCustomer:OrderRepositoryTest:currentlyIssuesOneQueryPerCustomer()",
-      "contextStatus": "MATCHED",
-      "issueReferences": [
-        {
-          "value": "DEBT2TEST-7",
-          "source": "comment"
-        }
-      ],
-      "externalTask": {
-        "provider": "jira",
-        "key": "DEBT2TEST-7",
-        "summary": "Batch OrderRepository customer lookups to remove N+1 queries",
-        "description": "OrderRepository.findOrdersForCustomers() loops over customer IDs and issues one simulated query per customer instead of a single batched lookup, causing an N+1 query pattern.\n\nDebt context (SATD): OrderRepository — TODO comment notes this was written for a single-customer admin screen and was never revisited when the bulk \"customer orders export\" feature reused it, where it now issues hundreds of queries per export.\n\nAcceptance Criteria:\n\n* Replace the per-ID loop with a single batched query (e.g., WHERE customer_id IN (...)).\n* findOrdersForCustomers() issues one query regardless of input size.\n* Test covers a multi-customer call and asserts the query/call count.",
-        "acceptanceCriteria": [],
-        "labels": [],
-        "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-7"
-      },
-      "classificationProvenance": {
-        "provider": "DebtHunter",
-        "strategy": "heuristic-fallback",
-        "version": "unavailable"
-      },
-      "errors": [],
-      "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
-      "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-      "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
+    "classificationProvenance": {
+      "provider": "DebtHunter",
+      "strategy": "model",
+      "version": "configured"
     },
-    {
-      "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/logging/AuditLoggerTest.java",
-      "methodName": "currentlyLogsSensitiveFieldsInPlaintext",
-      "lineNumber": 24,
-      "comment": "DEBT2TEST-6: logged entries currently contain the raw password and\ncard number in plaintext because there is no redaction step yet.",
-      "methodSourceCode": "// DEBT2TEST-6: logged entries currently contain the raw password and\n// card number in plaintext because there is no redaction step yet.\n@Test\nvoid currentlyLogsSensitiveFieldsInPlaintext() {\n    auditLogger.logRequest(new AuditLogger.Request(\"alice\", \"s3cr3t\", \"4111111111111111\"));\n    String entry \u003d auditLogger.getLoggedEntries().get(0);\n    assertTrue(entry.contains(\"s3cr3t\"));\n    assertTrue(entry.contains(\"4111111111111111\"));\n}",
-      "isSatd": true,
-      "debtType": "TEST",
-      "confidence": null,
-      "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/logging/AuditLoggerTest.java:24:5:currentlyLogsSensitiveFieldsInPlaintext:AuditLoggerTest:currentlyLogsSensitiveFieldsInPlaintext()",
-      "contextStatus": "MATCHED",
-      "issueReferences": [
-        {
-          "value": "DEBT2TEST-6",
-          "source": "comment"
-        }
-      ],
-      "externalTask": {
-        "provider": "jira",
-        "key": "DEBT2TEST-6",
-        "summary": "Redact sensitive data from audit logs",
-        "description": "AuditLogger.logRequest() writes full request objects to the log via toString(), including raw passwords and credit card numbers, in plaintext.\n\nDebt context (SATD): AuditLogger — FIXME comment flags this as a compliance risk (PCI-DSS/GDPR) introduced during the 2023 audit-trail rollout, since logs are shipped to a third-party aggregator.\n\nAcceptance Criteria:\n\n* Introduce a redaction step (field allowlist or masking) before any object is logged.\n* Sensitive fields (password, cardNumber, ssn, etc.) never reach the log sink in plaintext.\n* Unit test asserts logged output does not contain raw sensitive values.",
-        "acceptanceCriteria": [],
-        "labels": [],
-        "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-6"
-      },
-      "classificationProvenance": {
-        "provider": "DebtHunter",
-        "strategy": "heuristic-fallback",
-        "version": "unavailable"
-      },
-      "errors": [
-        {
-          "stage": "generation",
-          "code": "LLM_TRANSPORT_FAILED",
-          "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/logging/AuditLoggerTest.java:24:5:currentlyLogsSensitiveFieldsInPlaintext:AuditLoggerTest:currentlyLogsSensitiveFieldsInPlaintext()",
-          "recoverable": true,
-          "message": "pipeline error recorded"
-        }
-      ],
-      "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
-      "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-      "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
+    "errors": [],
+    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
+    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
+    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
+  },
+  {
+    "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/database/ConnectionPoolTest.java",
+    "methodName": "shouldNotExceedPoolSizeOnRelease",
+    "lineNumber": 32,
+    "comment": "TODO DEBT2TEST-3: add tests for concurrent access; it is untested because the pool\nlacks synchronization and a concurrency test would be flaky.",
+    "methodSourceCode": "// TODO DEBT2TEST-3: add tests for concurrent access; it is untested because the pool\n// lacks synchronization and a concurrency test would be flaky.\n@Test\nvoid shouldNotExceedPoolSizeOnRelease() throws InterruptedException {\n    ConnectionPool.DbConnection conn \u003d connectionPool.getConnection();\n    connectionPool.releaseConnection(conn);\n    connectionPool.releaseConnection(conn);\n    assertTrue(true);\n}",
+    "isSatd": true,
+    "debtType": "TEST",
+    "confidence": 0.4,
+    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/test/java/io/github/jonasfortes12/samples/debt/database/ConnectionPoolTest.java:32:5:shouldNotExceedPoolSizeOnRelease:ConnectionPoolTest:shouldNotExceedPoolSizeOnRelease()",
+    "contextStatus": "MATCHED",
+    "issueReferences": [
+      {
+        "value": "DEBT2TEST-3",
+        "source": "comment"
+      }
+    ],
+    "externalTask": {
+      "provider": "jira",
+      "key": "DEBT2TEST-3",
+      "summary": "Fix ConnectionPool race condition",
+      "description": "{{ConnectionPool.getConnection()}} and {{releaseConnection()}} access the shared {{availableConnections}} queue without synchronization, risking duplicate leases, lost connections, and pool exhaustion under load.\n\n*Debt context (SATD):* {{ConnectionPool}} — BUG comment blocks deployment to high-concurrency environments (10k+ RPS).\n\n*Acceptance Criteria:*\n\n* Replace {{LinkedList}} with {{ConcurrentLinkedQueue}}, or add proper synchronization around both methods.\n* Add a concurrency test that exercises concurrent {{getConnection}}/{{releaseConnection}} calls without lost or duplicated connections.",
+      "acceptanceCriteria": [],
+      "labels": [],
+      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-3"
     },
-    {
-      "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/payment/PaymentProcessorTest.java",
-      "methodName": "shouldFailOnNegativeAmountAfterRetries",
-      "lineNumber": 24,
-      "comment": "DEBT2TEST-2: the retry path around the hardcoded gateway timeout is\nonly exercised indirectly here, since the timeout cannot be injected.",
-      "methodSourceCode": "// DEBT2TEST-2: the retry path around the hardcoded gateway timeout is\n// only exercised indirectly here, since the timeout cannot be injected.\n@Test\nvoid shouldFailOnNegativeAmountAfterRetries() {\n    PaymentProcessor.Order order \u003d new PaymentProcessor.Order(\"order-2\", -50.0);\n    PaymentProcessor.PaymentResult result \u003d paymentProcessor.process(order);\n    assertFalse(result.success());\n}",
-      "isSatd": true,
-      "debtType": "TEST",
-      "confidence": null,
-      "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/payment/PaymentProcessorTest.java:24:5:shouldFailOnNegativeAmountAfterRetries:PaymentProcessorTest:shouldFailOnNegativeAmountAfterRetries()",
-      "contextStatus": "MATCHED",
-      "issueReferences": [
-        {
-          "value": "DEBT2TEST-2",
-          "source": "comment"
-        }
-      ],
-      "externalTask": {
-        "provider": "jira",
-        "key": "DEBT2TEST-2",
-        "summary": "Refactor payment timeout configuration",
-        "description": "The payment gateway timeout is hardcoded ({{GATEWAY_TIMEOUT_MS \u003d 5000}}) directly in {{PaymentProcessor}}, mixing configuration with business logic and making the retry path untestable without manual intervention.\n\n*Debt context (SATD):* {{PaymentProcessor}} — FIXME comment calls for extracting the timeout into a separate configuration class.\n\n*Acceptance Criteria:*\n\n* Extract {{GATEWAY_TIMEOUT_MS}} and {{MAX_RETRY_ATTEMPTS}} into an injectable configuration object.\n* {{PaymentProcessor}} receives configuration via constructor/DI instead of static constants.\n* Retry/timeout behavior is covered by unit tests using injected configuration values.",
-        "acceptanceCriteria": [],
-        "labels": [],
-        "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-2"
-      },
-      "classificationProvenance": {
-        "provider": "DebtHunter",
-        "strategy": "heuristic-fallback",
-        "version": "unavailable"
-      },
-      "errors": [
-        {
-          "stage": "generation",
-          "code": "LLM_RESPONSE_INVALID",
-          "candidateId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540:src/test/java/io/github/jonasfortes12/samples/debt/payment/PaymentProcessorTest.java:24:5:shouldFailOnNegativeAmountAfterRetries:PaymentProcessorTest:shouldFailOnNegativeAmountAfterRetries()",
-          "recoverable": false,
-          "message": "pipeline error recorded"
-        }
-      ],
-      "runId": "c0941d72e0d71a58ad976e9720c17102b6118ca3683815cab7c6fbb35694e540",
-      "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-      "revision": "6c2ebe1b62bd19eb3473d2fbdda039d179573801"
-    }
-  ]
-}
+    "classificationProvenance": {
+      "provider": "DebtHunter",
+      "strategy": "model",
+      "version": "configured"
+    },
+    "errors": [],
+    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
+    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
+    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
+  },
+  {
+    "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/database/OrderRepositoryTest.java",
+    "methodName": "currentlyIssuesOneQueryPerCustomer",
+    "lineNumber": 25,
+    "comment": "TODO DEBT2TEST-7: add tests for a single batched lookup; no test covers it, this one\nonly pins the current one-query-per-customer behavior.",
+    "methodSourceCode": "// TODO DEBT2TEST-7: add tests for a single batched lookup; no test covers it, this one\n// only pins the current one-query-per-customer behavior.\n@Test\nvoid currentlyIssuesOneQueryPerCustomer() {\n    orderRepository.findOrdersForCustomers(List.of(\"c1\", \"c2\", \"c3\"));\n    assertEquals(3, orderRepository.getQueryCount());\n}",
+    "isSatd": true,
+    "debtType": "TEST",
+    "confidence": 0.4,
+    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/test/java/io/github/jonasfortes12/samples/debt/database/OrderRepositoryTest.java:25:5:currentlyIssuesOneQueryPerCustomer:OrderRepositoryTest:currentlyIssuesOneQueryPerCustomer()",
+    "contextStatus": "MATCHED",
+    "issueReferences": [
+      {
+        "value": "DEBT2TEST-7",
+        "source": "comment"
+      }
+    ],
+    "externalTask": {
+      "provider": "jira",
+      "key": "DEBT2TEST-7",
+      "summary": "Batch OrderRepository customer lookups to remove N+1 queries",
+      "description": "OrderRepository.findOrdersForCustomers() loops over customer IDs and issues one simulated query per customer instead of a single batched lookup, causing an N+1 query pattern.\n\nDebt context (SATD): OrderRepository — TODO comment notes this was written for a single-customer admin screen and was never revisited when the bulk \"customer orders export\" feature reused it, where it now issues hundreds of queries per export.\n\nAcceptance Criteria:\n\n* Replace the per-ID loop with a single batched query (e.g., WHERE customer_id IN (...)).\n* findOrdersForCustomers() issues one query regardless of input size.\n* Test covers a multi-customer call and asserts the query/call count.",
+      "acceptanceCriteria": [],
+      "labels": [],
+      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-7"
+    },
+    "classificationProvenance": {
+      "provider": "DebtHunter",
+      "strategy": "model",
+      "version": "configured"
+    },
+    "errors": [],
+    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
+    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
+    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
+  },
+  {
+    "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/logging/AuditLoggerTest.java",
+    "methodName": "currentlyLogsSensitiveFieldsInPlaintext",
+    "lineNumber": 24,
+    "comment": "TODO DEBT2TEST-6: document why this test asserts the plaintext password; explain that\nit pins the current unredacted logging and must be inverted once redaction exists.",
+    "methodSourceCode": "// TODO DEBT2TEST-6: document why this test asserts the plaintext password; explain that\n// it pins the current unredacted logging and must be inverted once redaction exists.\n@Test\nvoid currentlyLogsSensitiveFieldsInPlaintext() {\n    auditLogger.logRequest(new AuditLogger.Request(\"alice\", \"s3cr3t\", \"4111111111111111\"));\n    String entry \u003d auditLogger.getLoggedEntries().get(0);\n    assertTrue(entry.contains(\"s3cr3t\"));\n    assertTrue(entry.contains(\"4111111111111111\"));\n}",
+    "isSatd": true,
+    "debtType": "DOCUMENTATION",
+    "confidence": 0.4,
+    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/test/java/io/github/jonasfortes12/samples/debt/logging/AuditLoggerTest.java:24:5:currentlyLogsSensitiveFieldsInPlaintext:AuditLoggerTest:currentlyLogsSensitiveFieldsInPlaintext()",
+    "contextStatus": "MATCHED",
+    "issueReferences": [
+      {
+        "value": "DEBT2TEST-6",
+        "source": "comment"
+      }
+    ],
+    "externalTask": {
+      "provider": "jira",
+      "key": "DEBT2TEST-6",
+      "summary": "Redact sensitive data from audit logs",
+      "description": "AuditLogger.logRequest() writes full request objects to the log via toString(), including raw passwords and credit card numbers, in plaintext.\n\nDebt context (SATD): AuditLogger — FIXME comment flags this as a compliance risk (PCI-DSS/GDPR) introduced during the 2023 audit-trail rollout, since logs are shipped to a third-party aggregator.\n\nAcceptance Criteria:\n\n* Introduce a redaction step (field allowlist or masking) before any object is logged.\n* Sensitive fields (password, cardNumber, ssn, etc.) never reach the log sink in plaintext.\n* Unit test asserts logged output does not contain raw sensitive values.",
+      "acceptanceCriteria": [],
+      "labels": [],
+      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-6"
+    },
+    "classificationProvenance": {
+      "provider": "DebtHunter",
+      "strategy": "model",
+      "version": "configured"
+    },
+    "errors": [],
+    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
+    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
+    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
+  },
+  {
+    "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/payment/PaymentProcessorTest.java",
+    "methodName": "shouldFailOnNegativeAmountAfterRetries",
+    "lineNumber": 24,
+    "comment": "TODO DEBT2TEST-2: add tests for the retry path; it is untested directly because the\nhardcoded gateway timeout cannot be injected.",
+    "methodSourceCode": "// TODO DEBT2TEST-2: add tests for the retry path; it is untested directly because the\n// hardcoded gateway timeout cannot be injected.\n@Test\nvoid shouldFailOnNegativeAmountAfterRetries() {\n    PaymentProcessor.Order order \u003d new PaymentProcessor.Order(\"order-2\", -50.0);\n    PaymentProcessor.PaymentResult result \u003d paymentProcessor.process(order);\n    assertFalse(result.success());\n}",
+    "isSatd": true,
+    "debtType": "TEST",
+    "confidence": 0.4,
+    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/test/java/io/github/jonasfortes12/samples/debt/payment/PaymentProcessorTest.java:24:5:shouldFailOnNegativeAmountAfterRetries:PaymentProcessorTest:shouldFailOnNegativeAmountAfterRetries()",
+    "contextStatus": "MATCHED",
+    "issueReferences": [
+      {
+        "value": "DEBT2TEST-2",
+        "source": "comment"
+      }
+    ],
+    "externalTask": {
+      "provider": "jira",
+      "key": "DEBT2TEST-2",
+      "summary": "Refactor payment timeout configuration",
+      "description": "The payment gateway timeout is hardcoded ({{GATEWAY_TIMEOUT_MS \u003d 5000}}) directly in {{PaymentProcessor}}, mixing configuration with business logic and making the retry path untestable without manual intervention.\n\n*Debt context (SATD):* {{PaymentProcessor}} — FIXME comment calls for extracting the timeout into a separate configuration class.\n\n*Acceptance Criteria:*\n\n* Extract {{GATEWAY_TIMEOUT_MS}} and {{MAX_RETRY_ATTEMPTS}} into an injectable configuration object.\n* {{PaymentProcessor}} receives configuration via constructor/DI instead of static constants.\n* Retry/timeout behavior is covered by unit tests using injected configuration values.",
+      "acceptanceCriteria": [],
+      "labels": [],
+      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-2"
+    },
+    "classificationProvenance": {
+      "provider": "DebtHunter",
+      "strategy": "model",
+      "version": "configured"
+    },
+    "errors": [],
+    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
+    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
+    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
+  }
+]

@@ -10,26 +10,15 @@ import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRe
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.context.TestPropertySource;
 
 /**
- * DEBT_PERSISTENCE_ENABLED=true with no reachable database mirrors how
- * PersistenceContextTest
- * exercises the CLI's own "enabled but unavailable" path: the child persistence
- * context fails to
- * connect, openIfEnabled catches that and returns an unavailable-but-present
- * PersistenceContext,
- * and this outer context boots normally with no real database and no Docker
- * involved.
+ * Boots the whole API context without a database (see {@link NoDatabaseTestSupport}) and checks
+ * the Swagger document is served. The database wiring itself is covered by
+ * {@link DebtApiDatabaseIntegrationTest}.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
-@TestPropertySource(properties = {
-        "DEBT_PERSISTENCE_ENABLED=true",
-        "DEBT_DB_URL=jdbc:postgresql://localhost:1/unreachable-test-db",
-        "DEBT_DB_USERNAME=test",
-        "DEBT_DB_PASSWORD=test"
-})
+@NoDatabaseTestSupport
 class DebtApiApplicationSmokeTest {
 
     @Autowired

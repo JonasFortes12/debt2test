@@ -28,9 +28,9 @@ public class WekaDebtHunterClassifier implements DebtClassifier {
     private static final String SATD_LABEL = "SATD";
     private static final List<String> BINARY_CLASS_VALUES =
             List.of("SATD", "WITHOUT_CLASSIFICATION");
-    /** Mirrors the class order in the bundled DebtHunter model metadata. */
+    /** Must match the class attribute order in DHmultiClassifier.model's training header. */
     private static final List<String> DEBT_TYPE_VALUES =
-            List.of("DESIGN", "TEST", "DOCUMENTATION", "IMPLEMENTATION", "DEFECT");
+            List.of("TEST", "IMPLEMENTATION", "DESIGN", "DEFECT", "DOCUMENTATION");
 
     private static final Provenance MODEL_PROVENANCE =
             new Provenance("DebtHunter", "model", "configured");

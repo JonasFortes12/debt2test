@@ -27,6 +27,12 @@
             <artifactId>weka-stable</artifactId>
             <version>3.8.6</version>
         </dependency>
+        <!-- DHmultiClassifier.model serializes weka.filters.supervised.instance.SMOTE (a Weka package, not in core). -->
+        <dependency>
+            <groupId>nz.ac.waikato.cms.weka</groupId>
+            <artifactId>SMOTE</artifactId>
+            <version>1.0.3</version>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

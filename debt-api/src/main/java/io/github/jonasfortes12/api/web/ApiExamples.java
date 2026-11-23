@@ -4,25 +4,41 @@ package io.github.jonasfortes12.api.web;
  * Example payloads shown in the Swagger docs. Keep them in step with the DTOs
  * they illustrate.
  */
-final class ApiExamples {
+public final class ApiExamples {
 
-        static final String EXECUTION_ID = "3f2b8c1e-9a4d-4e7b-8f6a-2c1d5e9b7a40";
+        public static final String EXECUTION_ID = "3f2b8c1e-9a4d-4e7b-8f6a-2c1d5e9b7a40";
 
-        static final String CREATE_RUN = """
+        public static final String CREATE_RUN = """
                         {
                           "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
                           "revision": "main",
-                          "contextEnabled": true,
+                          "context": {
+                            "provider": "jira",
+                            "baseUrl": "https://your-company.atlassian.net",
+                            "email": "dev@your-company.com",
+                            "apiToken": "<api-token>"
+                          },
                           "allowHeuristicFallback": true,
                           "testFramework": "JUnit 5"
                         }
                         """;
 
-        static final String RUN_ACCEPTED = """
+        public static final String CREATE_RUN_PUBLIC_JIRA = """
+                        {
+                          "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
+                          "context": { "provider": "jira", "baseUrl": "https://public-jira.example.org" }
+                        }
+                        """;
+
+        public static final String CREATE_RUN_WITHOUT_CONTEXT = """
+                        { "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project", "revision": "main" }
+                        """;
+
+        public static final String RUN_ACCEPTED = """
                         { "executionId": "3f2b8c1e-9a4d-4e7b-8f6a-2c1d5e9b7a40" }
                         """;
 
-        static final String RUN_STATUS_RUNNING = """
+        public static final String RUN_STATUS_RUNNING = """
                         {
                           "executionId": "3f2b8c1e-9a4d-4e7b-8f6a-2c1d5e9b7a40",
                           "runId": "9c1f0e6b2d7a4c3e8f5b1a0d6e2c7b4a9f3e8d1c0b5a6f7e2d9c4b3a1f0e8d7c",
@@ -36,7 +52,7 @@ final class ApiExamples {
                         }
                         """;
 
-        static final String RUN_REPORT = """
+        public static final String RUN_REPORT = """
                         {
                           "summary": {
                             "executionId": "3f2b8c1e-9a4d-4e7b-8f6a-2c1d5e9b7a40",
@@ -103,37 +119,102 @@ final class ApiExamples {
                         }
                         """;
 
-        static final String CANCEL_ACCEPTED = """
+        public static final String CANCEL_ACCEPTED = """
                         { "executionId": "3f2b8c1e-9a4d-4e7b-8f6a-2c1d5e9b7a40", "outcome": "ACCEPTED" }
                         """;
 
-        static final String INVALID_BODY = """
+        public static final String INVALID_BODY = """
                         {
                           "message": "invalid request body",
                           "fieldErrors": [ { "field": "repositoryUrl", "message": "must not be blank" } ]
                         }
                         """;
 
-        static final String MALFORMED_BODY = """
+        public static final String MALFORMED_BODY = """
                         { "message": "malformed JSON request body", "fieldErrors": [] }
                         """;
 
-        static final String PERSISTENCE_UNAVAILABLE = """
+        public static final String UNSUPPORTED_CONTEXT_PROVIDER = """
+                        {
+                          "message": "unsupported context provider 'github'; supported: jira",
+                          "fieldErrors": [ { "field": "context.provider", "message": "must be one of: jira" } ]
+                        }
+                        """;
+
+        public static final String CONTEXT_AUTH_REQUIRED = """
+                        {
+                          "message": "Jira at your-company.atlassian.net requires authentication; provide email and apiToken",
+                          "fieldErrors": []
+                        }
+                        """;
+
+        public static final String CONTEXT_CREDENTIALS_REJECTED = """
+                        { "message": "Jira at your-company.atlassian.net rejected the supplied credentials", "fieldErrors": [] }
+                        """;
+
+        public static final String CONTEXT_UNREACHABLE = """
+                        { "message": "could not reach Jira at your-company.atlassian.net to verify access", "fieldErrors": [] }
+                        """;
+
+        public static final String PERSISTENCE_UNAVAILABLE = """
                         { "message": "run could not be started: persistence is unavailable", "fieldErrors": [] }
                         """;
 
-        static final String RUN_NOT_FOUND = """
+        public static final String RUN_NOT_FOUND = """
                         { "message": "no run for execution 3f2b8c1e-9a4d-4e7b-8f6a-2c1d5e9b7a40", "fieldErrors": [] }
                         """;
 
-        static final String RUN_NOT_FINISHED = """
+        public static final String RUN_NOT_FINISHED = """
                         { "message": "run 3f2b8c1e-9a4d-4e7b-8f6a-2c1d5e9b7a40 has not finished yet", "fieldErrors": [] }
                         """;
 
-        static final String RUN_ALREADY_FINISHED = """
+        public static final String RUN_ALREADY_FINISHED = """
                         { "message": "run 3f2b8c1e-9a4d-4e7b-8f6a-2c1d5e9b7a40 has already finished", "fieldErrors": [] }
                         """;
 
         private ApiExamples() {
         }
+
+        public static final String ACCESS_CODE_REQUEST = """
+                        { "name": "Ana Souza", "email": "ana@example.com", "acceptedTermsVersion": "v1" }
+                        """;
+
+        public static final String ACCESS_REQUEST_ACCEPTED = """
+                        { "message": "If the address can receive email, a message has been sent to it." }
+                        """;
+
+        public static final String TERMS = """
+                        { "version": "v1", "text": "# Debt2Test terms of use (v1)\\n..." }
+                        """;
+
+        public static final String ACCESS_CODE_STATUS = """
+                        {
+                          "state": "USED",
+                          "expiresAt": "2026-12-06T12:00:00Z",
+                          "executionId": "3f2b8c1e-9a4d-4e7b-8f6a-2c1d5e9b7a40"
+                        }
+                        """;
+
+        public static final String ACCESS_CODE_REQUIRED = """
+                        { "message": "missing, unknown or expired access code", "fieldErrors": [] }
+                        """;
+
+        public static final String ACCESS_CODE_USED = """
+                        { "message": "access code has already been used for a run", "fieldErrors": [] }
+                        """;
+
+        public static final String TERMS_NOT_CURRENT = """
+                        {
+                          "message": "terms version 'v0' is not current; current is 'v1'",
+                          "fieldErrors": [ { "field": "acceptedTermsVersion", "message": "must be 'v1'" } ]
+                        }
+                        """;
+
+        public static final String DATABASE_UNAVAILABLE = """
+                        { "message": "the database is unavailable; try again later", "fieldErrors": [] }
+                        """;
+
+        public static final String TOO_MANY_ACCESS_REQUESTS = """
+                        { "message": "too many access-code requests from this address; try again later", "fieldErrors": [] }
+                        """;
 }
