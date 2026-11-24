@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -14,9 +15,11 @@ import org.springframework.web.bind.annotation.RestController;
 import io.github.jonasfortes12.api.PipelineRunLauncher;
 import io.github.jonasfortes12.api.access.AccessService;
 import io.github.jonasfortes12.api.access.web.AccessSecurity;
+import io.github.jonasfortes12.api.access.web.StudyKey;
 import io.github.jonasfortes12.api.access.web.BearerTokens;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import io.github.jonasfortes12.api.dto.CancelResponse;
 import io.github.jonasfortes12.api.dto.ContextSourceRequest;
@@ -53,8 +56,10 @@ import jakarta.validation.Valid;
 @RestController
 @RequestMapping("/api/pipeline/runs")
 @Tag(name = "Pipeline runs", description = "Start a run, poll its status, read its report, or cancel it. Every "
-                + "operation needs an access code (Authorization: Bearer <code>).")
+                + "operation needs an access code (Authorization: Bearer <code>), or the study service key "
+                + "(X-Study-Key) when the server has one configured.")
 @SecurityRequirement(name = AccessSecurity.SCHEME)
+@SecurityRequirement(name = StudyKey.SCHEME)
 public class PipelineRunController {
 
         private static final String JSON = "application/json";
@@ -89,7 +94,10 @@ public class PipelineRunController {
                         + "configuration and cannot be set per request. Needs an UNUSED access code, which this "
                         + "call spends: afterwards the code reads, polls and cancels only this run. A request "
                         + "rejected with 400, 502 or 503 does not spend the code. If the run is created but cannot "
-                        + "be linked to the code, it is cancelled, the code is released, and the call answers 503.")
+                        + "be linked to the code, it is cancelled, the code is released, and the call answers 503. "
+                        + "With the study service key (X-Study-Key) no access code is needed or spent, no participant "
+                        + "quota is used, and the run is recorded as triggered by 'study'; the same key then reads, "
+                        + "polls and cancels any run.")
         @ApiResponses({
                         @ApiResponse(responseCode = "202", description = "Run accepted and queued. Poll its status next.", content = @Content(mediaType = JSON, schema = @Schema(implementation = RunAcceptedResponse.class), examples = @ExampleObject(value = ApiExamples.RUN_ACCEPTED))),
                         @ApiResponse(responseCode = "400", description = "The body is not valid JSON, has a wrongly typed "
@@ -117,12 +125,20 @@ public class PipelineRunController {
                         @ExampleObject(name = "private-jira", summary = "Mock repository with context from a private Jira", value = ApiExamples.CREATE_RUN),
                         @ExampleObject(name = "public-jira", summary = "Context from a public Jira (no credentials)", value = ApiExamples.CREATE_RUN_PUBLIC_JIRA),
                         @ExampleObject(name = "no-context", summary = "Skip issue-tracker context", value = ApiExamples.CREATE_RUN_WITHOUT_CONTEXT) })) @Valid @RequestBody CreateRunRequest request,
-                        @Parameter(hidden = true) @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
+                        @Parameter(hidden = true) @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+                        @Parameter(hidden = true) @RequestAttribute(name = StudyKey.REQUEST_ATTRIBUTE, required = false) Boolean studyRun) {
                 Optional<ContextSource> contextSource = verifiedContextSource(request.context());
-                String executionId = accessService.startRun(BearerTokens.from(authorization),
-                                () -> launcher.submit(toPipelineRequest(request, contextSource), contextSource),
-                                launcher::cancel);
+                Supplier<String> submitRun = () -> launcher.submit(toPipelineRequest(request, contextSource), contextSource);
+                String executionId = Boolean.TRUE.equals(studyRun)
+                                ? startStudyRun(submitRun)
+                                : accessService.startRun(BearerTokens.from(authorization), submitRun, launcher::cancel);
                 return new RunAcceptedResponse(executionId);
+        }
+
+        private String startStudyRun(Supplier<String> submitRun) {
+                String executionId = submitRun.get();
+                runStore.runTriggeredBy(executionId, StudyKey.TRIGGER);
+                return executionId;
         }
 
         @GetMapping("/{executionId}")

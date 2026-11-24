@@ -98,6 +98,13 @@ public interface PipelineRunStore {
     }
 
     /**
+     * Records who started the run (e.g. {@code "study"} for runs started with the study service key).
+     * Called right after the run is queued; ignored for an unknown run.
+     */
+    default void runTriggeredBy(String executionId, String trigger) {
+    }
+
+    /**
      * Returns the run's current snapshot, or empty if {@code executionId} is
      * unknown.
      */

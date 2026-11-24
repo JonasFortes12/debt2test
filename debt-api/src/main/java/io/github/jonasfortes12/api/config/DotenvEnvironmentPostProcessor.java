@@ -32,6 +32,7 @@ public class DotenvEnvironmentPostProcessor implements EnvironmentPostProcessor 
             "DEBT_DB_USERNAME",
             "DEBT_DB_PASSWORD",
             "DEBT_DB_POOL_SIZE",
+            "DEBT_STUDY_API_KEY",
             "DEBT_ACCESS_RUN_QUOTA",
             "DEBT_ACCESS_CODE_TTL",
             "DEBT_ACCESS_RESULTS_TTL",

@@ -52,48 +52,51 @@ Authentication currently hashes passwords with MD5, which is cryptographically b
 ### Generated Test Case
 
 ```java
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.NullAndEmptySource;
-import org.junit.jupiter.params.provider.ValueSource;
+package com.example.auth;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.*;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
 
 /**
- * Tests for LoginService.authenticate() covering the legacy MD5 path (DEBT2TEST-1).
+ * Characterization and design tests for {@code LoginService.authenticate()}.
  *
- * Assumptions about the production class (not shown in the method source):
- *   - LoginService has a no-arg constructor.
- *   - validateHash(String username, String passwordHash) is non-private (protected or
- *     package-private) so a test double can observe and control it.
- *   - legacyMd5Hash(String) produces a lowercase hex MD5 digest of the UTF-8 password.
+ * These tests pin the current MD5-based behaviour (TODO DEBT2TEST-1) so that the
+ * refactor to bcrypt (workFactor=12) or Argon2 can be verified against the same
+ * contract. The bcrypt-specific tests are disabled until the migration lands.
  *
- * Adjust the test double if these assumptions do not hold.
+ * Assumption: {@code validateHash(String, String)} is overridable (protected or
+ * package-private) and is the single point where the stored hash is compared.
  */
 class LoginServiceAuthenticateTest {
 
-    /**
-     * Test double that records validateHash() invocations and returns a configurable result,
-     * isolating authenticate() from any real credential store.
-     */
+    /** Test double that records validateHash calls and returns a configurable result. */
     static class RecordingLoginService extends LoginService {
+        final Map<String, String> storedHashes = new ConcurrentHashMap<>();
         final List<String[]> validateCalls = new ArrayList<>();
-        boolean validateResult = false;
 
         @Override
         protected boolean validateHash(String username, String passwordHash) {
             validateCalls.add(new String[] {username, passwordHash});
-            return validateResult;
+            return passwordHash != null && passwordHash.equals(storedHashes.get(username));
+        }
+
+        void store(String username, String passwordHash) {
+            storedHashes.put(username, passwordHash);
         }
     }
 
@@ -108,141 +111,132 @@ class LoginServiceAuthenticateTest {
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
             byte[] digest = md.digest(input.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : digest) {
-                sb.append(String.format("%02x", b));
-            }
-            return sb.toString();
+            return HexFormat.of().formatHex(digest);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("MD5 not available", e);
         }
     }
 
     @Nested
-    @DisplayName("Invalid username handling")
-    class InvalidUsername {
+    @DisplayName("input validation guards")
+    class InputValidation {
 
-        @ParameterizedTest(name = "returns false for username [{0}] without validating")
-        @NullAndEmptySource
-        void rejectsNullOrEmptyUsername(String username) {
-            boolean result = service.authenticate(username, "password");
-
-            assertFalse(result);
+        @Test
+        @DisplayName("null username is rejected without consulting the credential store")
+        void nullUsernameReturnsFalse() {
+            assertFalse(service.authenticate(null, "password"));
             assertTrue(service.validateCalls.isEmpty(),
-                    "validateHash must not be consulted for an invalid username");
+                    "validateHash must not be called for a null username");
         }
 
         @Test
-        @DisplayName("rejects invalid username even when validator would accept")
-        void rejectsEvenIfValidatorWouldAccept() {
-            service.validateResult = true;
-
+        @DisplayName("empty username is rejected without consulting the credential store")
+        void emptyUsernameReturnsFalse() {
             assertFalse(service.authenticate("", "password"));
-            assertFalse(service.authenticate(null, "password"));
+            assertTrue(service.validateCalls.isEmpty(),
+                    "validateHash must not be called for an empty username");
         }
     }
 
     @Nested
-    @DisplayName("Legacy MD5 hashing path")
-    class LegacyMd5Path {
+    @DisplayName("legacy MD5 hashing behaviour")
+    class LegacyMd5Behaviour {
 
         @Test
-        @DisplayName("hashes password with MD5 before delegating to validateHash")
-        void passesMd5HashToValidator() {
+        @DisplayName("passes the MD5 hex digest of the password to validateHash")
+        void delegatesMd5DigestToValidator() {
             service.authenticate("alice", "password");
 
             assertEquals(1, service.validateCalls.size());
-            String[] call = service.validateCalls.get(0);
-            assertEquals("alice", call[0]);
-            assertEquals("5f4dcc3b5aa765d61d8327deb882cf99", call[1]);
-            assertEquals(md5Hex("password"), call[1]);
+            assertEquals("alice", service.validateCalls.get(0)[0]);
+            assertEquals("5f4dcc3b5aa765d61d8327deb882cf99", service.validateCalls.get(0)[1],
+                    "MD5(\"password\") known test vector");
         }
 
         @Test
-        @DisplayName("hash is deterministic for the same password")
-        void hashIsDeterministic() {
-            service.authenticate("alice", "s3cret!");
-            service.authenticate("alice", "s3cret!");
-
-            assertEquals(2, service.validateCalls.size());
-            assertEquals(service.validateCalls.get(0)[1], service.validateCalls.get(1)[1]);
-        }
-
-        @ParameterizedTest(name = "password [{0}] produces matching MD5 digest")
-        @ValueSource(strings = {"a", "password", "P@ssw0rd!", "пароль", "  spaced  "})
-        void hashMatchesReferenceMd5(String password) {
+        @DisplayName("digest matches an independently computed MD5 hex string")
+        void digestMatchesIndependentComputation() {
+            String password = "correct horse battery staple";
             service.authenticate("bob", password);
 
             assertEquals(md5Hex(password), service.validateCalls.get(0)[1]);
         }
 
         @Test
-        @DisplayName("different passwords produce different hashes")
-        void differentPasswordsDifferentHashes() {
-            service.authenticate("alice", "password1");
-            service.authenticate("alice", "password2");
+        @DisplayName("password hashing is case-sensitive")
+        void passwordIsCaseSensitive() {
+            service.authenticate("carol", "Password");
+            service.authenticate("carol", "password");
 
             assertNotEquals(service.validateCalls.get(0)[1], service.validateCalls.get(1)[1]);
         }
-    }
-
-    @Nested
-    @DisplayName("Result propagation")
-    class ResultPropagation {
 
         @Test
-        @DisplayName("returns true when validator accepts the hash")
-        void returnsTrueWhenValidatorAccepts() {
-            service.validateResult = true;
+        @DisplayName("same password produces the same hash (deterministic, no salt)")
+        void hashIsDeterministic() {
+            service.authenticate("dave", "secret");
+            service.authenticate("dave", "secret");
 
-            assertTrue(service.authenticate("alice", "password"));
-        }
-
-        @Test
-        @DisplayName("returns false when validator rejects the hash")
-        void returnsFalseWhenValidatorRejects() {
-            service.validateResult = false;
-
-            assertFalse(service.authenticate("alice", "wrong"));
-        }
-
-        @Test
-        @DisplayName("validator receives the exact username supplied")
-        void forwardsUsername() {
-            service.authenticate("Alice.Smith", "password");
-
-            assertEquals("Alice.Smith", service.validateCalls.get(0)[0]);
+            assertEquals(service.validateCalls.get(0)[1], service.validateCalls.get(1)[1]);
         }
     }
 
     @Nested
-    @DisplayName("Target state: bcrypt/Argon2 migration (DEBT2TEST-1)")
-    class BcryptMigrationTarget {
+    @DisplayName("authentication outcome")
+    class Outcome {
 
         @Test
-        @Disabled("Pending migration: replace legacyMd5Hash with bcrypt (workFactor=12) or Argon2")
-        @DisplayName("stored hash is not a raw MD5 digest after migration")
-        void storedHashIsNotMd5() {
-            service.validateResult = true;
+        @DisplayName("returns true when the stored hash matches the MD5 of the password")
+        void correctPasswordAuthenticates() {
+            service.store("erin", md5Hex("hunter2"));
 
-            service.authenticate("alice", "password");
-
-            String submitted = service.validateCalls.get(0)[1];
-            assertNotEquals(md5Hex("password"), submitted,
-                    "After migration, the validator should receive a bcrypt/Argon2 comparison, not MD5");
+            assertTrue(service.authenticate("erin", "hunter2"));
         }
 
         @Test
-        @Disabled("Pending migration: legacy MD5 hashes must be re-hashed on successful login")
-        @DisplayName("successful login with legacy MD5 hash triggers re-hash to bcrypt")
-        void successfulLegacyLoginRehashes() {
-            // Expected future behavior: after a successful authenticate() using a legacy MD5
-            // record, the stored credential is upgraded to bcrypt(workFactor=12).
-            // Implement once the credential store and bcrypt dependency are available.
-            service.validateResult = true;
+        @DisplayName("returns false when the password is wrong")
+        void wrongPasswordFails() {
+            service.store("frank", md5Hex("hunter2"));
 
-            assertTrue(service.authenticate("alice", "password"));
-            // TODO: verify credential store now contains a bcrypt hash with cost factor 12.
+            assertFalse(service.authenticate("frank", "hunter3"));
+        }
+
+        @Test
+        @DisplayName("returns false for an unknown user")
+        void unknownUserFails() {
+            assertFalse(service.authenticate("ghost", "anything"));
+        }
+    }
+
+    /**
+     * Acceptance criteria for the migration (bcrypt workFactor=12 or Argon2) are
+     * captured below. Enable once the legacyMd5Hash path is replaced.
+     */
+    @Nested
+    @DisplayName("bcrypt migration (pending DEBT2TEST-1)")
+    class BcryptMigration {
+
+        @Test
+        @Disabled("Pending DEBT2TEST-1: replace MD5 with bcrypt(workFactor=12) or Argon2")
+        @DisplayName("stored bcrypt hash authenticates the correct password")
+        void bcryptRoundTrip() {
+            // Expected post-migration contract:
+            // String stored = PasswordHasher.bcrypt("hunter2", 12);
+            // service.store("gina", stored);
+            // assertTrue(service.authenticate("gina", "hunter2"));
+            // assertFalse(service.authenticate("gina", "wrong"));
+            fail("Migration not yet implemented");
+        }
+
+        @Test
+        @Disabled("Pending DEBT2TEST-1: legacy MD5 hashes must be re-hashed on successful login")
+        @DisplayName("legacy MD5 hash is upgraded to bcrypt after successful login")
+        void legacyHashIsRehashedOnLogin() {
+            // Expected post-migration contract:
+            // service.store("hank", md5Hex("hunter2"));
+            // assertTrue(service.authenticate("hank", "hunter2"));
+            // assertTrue(PasswordHasher.isBcrypt(service.storedHashes.get("hank")));
+            fail("Migration not yet implemented");
         }
     }
 }
@@ -300,167 +294,134 @@ Acceptance Criteria:
 ```java
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests for DEBT2TEST-7: OrderRepository.findOrdersForCustomers() must issue a single
- * batched query (WHERE customer_id IN (...)) instead of one query per customer (N+1).
+ * Tests for DEBT2TEST-7: OrderRepository.findOrdersForCustomers() issues one query
+ * per customer (N+1). The expected design is a single batched lookup
+ * (WHERE customer_id IN (...)) regardless of input size.
  *
- * Assumed seam: OrderRepository is constructed with a QueryExecutor that receives the
- * SQL text and bound parameters and returns result rows. Every query issued by the
- * repository goes through QueryExecutor.execute(...), so its invocation count is the
- * query count.
+ * Assumptions about the refactored design:
+ *  - The per-customer query remains available as findOrdersByCustomer(String).
+ *  - The batched query is exposed as findOrdersByCustomerIds(List<String>) and is
+ *    overridable (public or protected) so query invocations can be counted.
+ *
+ * These tests are expected to FAIL against the current N+1 implementation and
+ * PASS once the loop is replaced with a single batched query.
  */
-class OrderRepositoryBatchedQueryTest {
+class OrderRepositoryFindOrdersForCustomersTest {
 
-    /** Minimal query executor interface assumed by the repository under test. */
-    interface QueryExecutor {
-        List<String> execute(String sql, List<String> params);
-    }
-
-    /**
-     * Fake executor that records every query and simulates an IN (...) lookup
-     * over an in-memory order table keyed by customer ID.
-     */
-    static class RecordingQueryExecutor implements QueryExecutor {
-        final Map<String, List<String>> ordersByCustomer = new HashMap<>();
-        final List<String> executedSql = new ArrayList<>();
-        final List<List<String>> executedParams = new ArrayList<>();
-
-        @Override
-        public List<String> execute(String sql, List<String> params) {
-            executedSql.add(sql);
-            executedParams.add(new ArrayList<>(params));
-
-            List<String> rows = new ArrayList<>();
-            for (String customerId : params) {
-                rows.addAll(ordersByCustomer.getOrDefault(customerId, List.of()));
-            }
-            return rows;
-        }
-
-        int queryCount() {
-            return executedSql.size();
-        }
-    }
-
-    private RecordingQueryExecutor executor;
-    private OrderRepository repository;
+    private CountingOrderRepository repository;
 
     @BeforeEach
     void setUp() {
-        executor = new RecordingQueryExecutor();
-        repository = new OrderRepository(executor);
+        repository = new CountingOrderRepository();
     }
 
-    private static List<String> customerIds(int count) {
-        List<String> ids = new ArrayList<>();
-        for (int i = 1; i <= count; i++) {
-            ids.add("cust-" + i);
+    @Nested
+    @DisplayName("findOrdersForCustomers query count (DEBT2TEST-7)")
+    class QueryCountTests {
+
+        @Test
+        @DisplayName("multi-customer call returns all orders using a single batched query")
+        void multiCustomerCallIssuesSingleBatchedQuery() {
+            List<String> customerIds = List.of("C1", "C2", "C3", "C4", "C5");
+            repository.seedOrdersFor("C1", "O-1a", "O-1b");
+            repository.seedOrdersFor("C2", "O-2a");
+            repository.seedOrdersFor("C3");
+            repository.seedOrdersFor("C4", "O-4a", "O-4b", "O-4c");
+            repository.seedOrdersFor("C5", "O-5a");
+
+            List<String> result = repository.findOrdersForCustomers(customerIds);
+
+            assertEquals(7, result.size(), "all orders for all customers should be returned");
+            assertTrue(result.containsAll(List.of("O-1a", "O-1b", "O-2a", "O-4a", "O-4b", "O-4c", "O-5a")));
+
+            assertEquals(0, repository.perCustomerQueryCount,
+                    "must not issue one query per customer (N+1)");
+            assertEquals(1, repository.batchedQueryCount,
+                    "must issue exactly one batched query");
         }
-        return ids;
+
+        @Test
+        @DisplayName("query count stays at one regardless of input size")
+        void queryCountIndependentOfInputSize() {
+            List<String> customerIds = IntStream.rangeClosed(1, 500)
+                    .mapToObj(i -> "C" + i)
+                    .collect(Collectors.toList());
+            customerIds.forEach(id -> repository.seedOrdersFor(id, id + "-order"));
+
+            List<String> result = repository.findOrdersForCustomers(customerIds);
+
+            assertEquals(500, result.size());
+            assertEquals(1, repository.batchedQueryCount,
+                    "a 500-customer export must still use a single batched query");
+            assertEquals(0, repository.perCustomerQueryCount,
+                    "no per-customer queries should be issued");
+        }
+
+        @Test
+        @DisplayName("single customer call still uses one batched query")
+        void singleCustomerUsesOneBatchedQuery() {
+            repository.seedOrdersFor("C1", "O-1a");
+
+            List<String> result = repository.findOrdersForCustomers(List.of("C1"));
+
+            assertEquals(List.of("O-1a"), result);
+            assertEquals(1, repository.batchedQueryCount);
+            assertEquals(0, repository.perCustomerQueryCount);
+        }
+
+        @Test
+        @DisplayName("empty input returns empty result without querying")
+        void emptyInputIssuesNoQueries() {
+            List<String> result = repository.findOrdersForCustomers(Collections.emptyList());
+
+            assertTrue(result.isEmpty());
+            assertEquals(0, repository.batchedQueryCount + repository.perCustomerQueryCount,
+                    "no query should be issued for empty input");
+        }
     }
 
-    private void seedOrders(List<String> ids, int ordersPerCustomer) {
-        for (String id : ids) {
+    /**
+     * In-memory repository that counts query invocations. Per-customer lookups and
+     * batched lookups are tracked separately so the N+1 pattern is detectable.
+     */
+    static class CountingOrderRepository extends OrderRepository {
+
+        private final java.util.Map<String, List<String>> store = new java.util.HashMap<>();
+        int perCustomerQueryCount = 0;
+        int batchedQueryCount = 0;
+
+        void seedOrdersFor(String customerId, String... orderIds) {
+            store.computeIfAbsent(customerId, k -> new ArrayList<>())
+                    .addAll(List.of(orderIds));
+        }
+
+        @Override
+        public List<String> findOrdersByCustomer(String customerId) {
+            perCustomerQueryCount++;
+            return new ArrayList<>(store.getOrDefault(customerId, Collections.emptyList()));
+        }
+
+        public List<String> findOrdersByCustomerIds(List<String> customerIds) {
+            batchedQueryCount++;
             List<String> orders = new ArrayList<>();
-            for (int j = 1; j <= ordersPerCustomer; j++) {
-                orders.add("order-" + id + "-" + j);
+            for (String id : customerIds) {
+                orders.addAll(store.getOrDefault(id, Collections.emptyList()));
             }
-            executor.ordersByCustomer.put(id, orders);
+            return orders;
         }
-    }
-
-    @Test
-    @DisplayName("Multi-customer call issues exactly one batched query")
-    void multiCustomerCallIssuesSingleQuery() {
-        List<String> ids = customerIds(5);
-        seedOrders(ids, 2);
-
-        List<String> result = repository.findOrdersForCustomers(ids);
-
-        assertEquals(1, executor.queryCount(),
-                "findOrdersForCustomers must issue one query regardless of customer count");
-    }
-
-    @Test
-    @DisplayName("Batched query uses an IN (...) clause with all customer IDs as parameters")
-    void batchedQueryUsesInClauseWithAllIds() {
-        List<String> ids = customerIds(4);
-        seedOrders(ids, 1);
-
-        repository.findOrdersForCustomers(ids);
-
-        assertEquals(1, executor.queryCount());
-        String sql = executor.executedSql.get(0).toUpperCase();
-        assertTrue(sql.contains("IN ("), "Expected a batched IN (...) clause, got: " + sql);
-        assertEquals(ids, executor.executedParams.get(0),
-                "All customer IDs should be bound in the single batched query");
-    }
-
-    @Test
-    @DisplayName("Multi-customer call returns all orders for all customers")
-    void multiCustomerCallReturnsAllOrders() {
-        List<String> ids = customerIds(3);
-        seedOrders(ids, 2);
-
-        List<String> result = repository.findOrdersForCustomers(ids);
-
-        assertEquals(6, result.size());
-        for (String id : ids) {
-            assertTrue(result.contains("order-" + id + "-1"));
-            assertTrue(result.contains("order-" + id + "-2"));
-        }
-    }
-
-    @ParameterizedTest(name = "query count stays at 1 for {0} customers")
-    @ValueSource(ints = {1, 2, 10, 100, 500})
-    @DisplayName("Query count is constant with respect to input size")
-    void queryCountIndependentOfInputSize(int customerCount) {
-        List<String> ids = customerIds(customerCount);
-        seedOrders(ids, 1);
-
-        List<String> result = repository.findOrdersForCustomers(ids);
-
-        assertEquals(1, executor.queryCount(),
-                "Query count must not scale with the number of customers");
-        assertEquals(customerCount, result.size());
-    }
-
-    @Test
-    @DisplayName("Customers without orders contribute nothing but do not add queries")
-    void customersWithoutOrdersAddNoResultsOrQueries() {
-        List<String> ids = customerIds(4);
-        // Only the first customer has orders
-        executor.ordersByCustomer.put(ids.get(0), List.of("order-only-1", "order-only-2"));
-
-        List<String> result = repository.findOrdersForCustomers(ids);
-
-        assertEquals(1, executor.queryCount());
-        assertEquals(2, result.size());
-        assertTrue(result.contains("order-only-1"));
-        assertTrue(result.contains("order-only-2"));
-    }
-
-    @Test
-    @DisplayName("Empty customer list returns no orders without issuing per-customer queries")
-    void emptyInputReturnsEmptyWithoutPerCustomerQueries() {
-        List<String> result = repository.findOrdersForCustomers(List.of());
-
-        assertTrue(result.isEmpty());
-        assertFalse(executor.queryCount() > 1,
-                "Empty input must not issue more than one query");
     }
 }
 ```
@@ -513,42 +474,32 @@ Acceptance Criteria:
 ### Generated Test Case
 
 ```java
-package com.example.audit;
+import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
- * Regression tests for DEBT2TEST-6: AuditLogger.logRequest() must never write
- * sensitive values (password, card number, SSN) to the log sink in plaintext.
+ * Tests for DEBT2TEST-6: AuditLogger.logRequest() must not write raw sensitive
+ * values (password, card number, SSN) to the log sink.
  *
- * Assumptions (adjust to the actual API in the codebase):
- *  - AuditLogger is constructed with a List<String> sink (entries are appended to it).
- *  - Request exposes a constructor/builder accepting the fields used below.
- *  - Non-sensitive fields (requestId, username, amount) are expected to remain in the log.
- *
- * These tests are expected to FAIL against the current implementation (sink.add(request.toString()))
- * and PASS once a redaction step is applied before logging.
+ * Assumed API (adjust to the actual codebase if names differ):
+ *   - AuditLogger(List<String> sink)
+ *   - Request(String userId, String password, String cardNumber, String ssn, String action)
  */
-@DisplayName("AuditLogger redaction (DEBT2TEST-6)")
 class AuditLoggerRedactionTest {
 
-    private static final String REQUEST_ID = "req-1001";
-    private static final String USERNAME = "alice";
-    private static final String RAW_PASSWORD = "Sup3r$ecretPw!";
-    private static final String RAW_CARD_NUMBER = "4111111111111111";
-    private static final String RAW_CARD_FORMATTED = "4111 1111 1111 1111";
+    private static final String RAW_PASSWORD = "S3cr3t!Passw0rd";
+    private static final String RAW_CARD = "4111111111111111";
     private static final String RAW_SSN = "123-45-6789";
+    private static final String USER_ID = "user-42";
+    private static final String ACTION = "TRANSFER_FUNDS";
 
     private List<String> sink;
     private AuditLogger auditLogger;
@@ -559,116 +510,130 @@ class AuditLoggerRedactionTest {
         auditLogger = new AuditLogger(sink);
     }
 
-    private Request sensitiveRequest() {
-        // Adjust to the real Request construction API.
-        return new Request(REQUEST_ID, USERNAME, RAW_PASSWORD, RAW_CARD_NUMBER, RAW_SSN, 42.50);
-    }
-
-    private static String digitsOnly(String s) {
-        return s.replaceAll("\\D", "");
-    }
-
     @Nested
-    @DisplayName("Sensitive values never reach the sink in plaintext")
-    class SensitiveValueRedaction {
+    @DisplayName("DEBT2TEST-6: sensitive fields never reach the log sink in plaintext")
+    class SensitiveDataRedaction {
 
         @Test
-        @DisplayName("raw password is not written to the log")
-        void logRequest_doesNotWriteRawPassword() {
-            auditLogger.logRequest(sensitiveRequest());
+        @DisplayName("raw password is not written to the sink")
+        void passwordIsNotLogged() {
+            Request request = new Request(USER_ID, RAW_PASSWORD, RAW_CARD, RAW_SSN, ACTION);
 
-            assertEquals(1, sink.size(), "exactly one entry expected");
-            assertFalse(sink.get(0).contains(RAW_PASSWORD),
-                    "raw password must not appear in the audit log entry");
+            auditLogger.logRequest(request);
+
+            assertFalse(sinkContents().contains(RAW_PASSWORD),
+                    "Raw password must not appear in audit log output");
         }
 
         @Test
-        @DisplayName("raw card number is not written to the log (plain form)")
-        void logRequest_doesNotWriteRawCardNumber() {
-            auditLogger.logRequest(sensitiveRequest());
+        @DisplayName("raw card number is not written to the sink")
+        void cardNumberIsNotLogged() {
+            Request request = new Request(USER_ID, RAW_PASSWORD, RAW_CARD, RAW_SSN, ACTION);
 
-            assertFalse(sink.get(0).contains(RAW_CARD_NUMBER),
-                    "full PAN must not appear in the audit log entry");
+            auditLogger.logRequest(request);
+
+            assertFalse(sinkContents().contains(RAW_CARD),
+                    "Raw card number must not appear in audit log output");
         }
 
         @Test
-        @DisplayName("card number is not written to the log (formatted/separated form)")
-        void logRequest_doesNotWriteFormattedCardNumber() {
-            auditLogger.logRequest(sensitiveRequest());
+        @DisplayName("raw SSN is not written to the sink")
+        void ssnIsNotLogged() {
+            Request request = new Request(USER_ID, RAW_PASSWORD, RAW_CARD, RAW_SSN, ACTION);
 
-            String entry = sink.get(0);
-            assertFalse(entry.contains(RAW_CARD_FORMATTED),
-                    "space-separated PAN must not appear in the audit log entry");
-            assertFalse(digitsOnly(entry).contains(RAW_CARD_NUMBER),
-                    "PAN digit sequence must not be recoverable from the audit log entry");
+            auditLogger.logRequest(request);
+
+            assertFalse(sinkContents().contains(RAW_SSN),
+                    "Raw SSN must not appear in audit log output");
         }
 
         @Test
-        @DisplayName("raw SSN is not written to the log")
-        void logRequest_doesNotWriteRawSsn() {
-            auditLogger.logRequest(sensitiveRequest());
+        @DisplayName("no sensitive value appears anywhere in the logged output")
+        void noSensitiveValueLeaks() {
+            Request request = new Request(USER_ID, RAW_PASSWORD, RAW_CARD, RAW_SSN, ACTION);
 
-            String entry = sink.get(0);
-            assertFalse(entry.contains(RAW_SSN), "raw SSN must not appear in the audit log entry");
-            assertFalse(digitsOnly(entry).contains(digitsOnly(RAW_SSN)),
-                    "SSN digit sequence must not be recoverable from the audit log entry");
-        }
+            auditLogger.logRequest(request);
 
-        @Test
-        @DisplayName("no sensitive value leaks across multiple logged requests")
-        void logRequest_multipleRequests_noSensitiveValueLeaks() {
-            auditLogger.logRequest(sensitiveRequest());
-            auditLogger.logRequest(sensitiveRequest());
-            auditLogger.logRequest(sensitiveRequest());
-
-            assertEquals(3, sink.size());
-            for (String entry : sink) {
-                assertAll(
-                        () -> assertFalse(entry.contains(RAW_PASSWORD), "password leaked: " + entry),
-                        () -> assertFalse(entry.contains(RAW_CARD_NUMBER), "PAN leaked: " + entry),
-                        () -> assertFalse(entry.contains(RAW_SSN), "SSN leaked: " + entry)
-                );
-            }
-        }
-    }
-
-    @Nested
-    @DisplayName("Redaction preserves audit usefulness")
-    class RedactionPreservesAuditValue {
-
-        @Test
-        @DisplayName("card number is masked, retaining only the last four digits")
-        void logRequest_cardNumberMaskedToLastFour() {
-            auditLogger.logRequest(sensitiveRequest());
-
-            String entry = sink.get(0);
-            assertTrue(entry.contains("1111"),
-                    "last four digits should remain to support audit correlation");
-            assertTrue(entry.contains("*") || entry.toLowerCase().contains("masked")
-                            || entry.toLowerCase().contains("redacted"),
-                    "card number should carry an explicit mask/redaction marker");
-        }
-
-        @Test
-        @DisplayName("non-sensitive fields remain present in the log entry")
-        void logRequest_preservesNonSensitiveFields() {
-            auditLogger.logRequest(sensitiveRequest());
-
-            String entry = sink.get(0);
+            String output = sinkContents();
             assertAll(
-                    () -> assertTrue(entry.contains(REQUEST_ID), "requestId should be logged"),
-                    () -> assertTrue(entry.contains(USERNAME), "username should be logged")
+                    () -> assertFalse(output.contains(RAW_PASSWORD), "password leaked"),
+                    () -> assertFalse(output.contains(RAW_CARD), "card number leaked"),
+                    () -> assertFalse(output.contains(RAW_SSN), "SSN leaked")
             );
         }
 
         @Test
-        @DisplayName("redacted entry is still produced for each request (no dropped audit records)")
-        void logRequest_alwaysWritesEntry() {
-            auditLogger.logRequest(sensitiveRequest());
+        @DisplayName("sensitive values are not logged even when they appear as field names in toString()")
+        void rawSensitiveValuesAbsentFromEntryList() {
+            Request request = new Request(USER_ID, RAW_PASSWORD, RAW_CARD, RAW_SSN, ACTION);
 
-            assertFalse(sink.isEmpty(), "audit entry must not be dropped by redaction");
-            assertFalse(sink.get(0).isBlank(), "audit entry must not be blank");
+            auditLogger.logRequest(request);
+
+            assertFalse(sink.isEmpty(), "Expected exactly one audit entry to be written");
+            for (String entry : sink) {
+                assertFalse(entry.contains(RAW_PASSWORD), "password leaked in entry: " + entry);
+                assertFalse(entry.contains(RAW_CARD), "card number leaked in entry: " + entry);
+                assertFalse(entry.contains(RAW_SSN), "SSN leaked in entry: " + entry);
+            }
         }
+
+        @ParameterizedTest(name = "sensitive value [{0}] is redacted")
+        @ValueSource(strings = {RAW_PASSWORD, RAW_CARD, RAW_SSN})
+        void eachSensitiveValueIsRedacted(String sensitiveValue) {
+            Request request = new Request(USER_ID, RAW_PASSWORD, RAW_CARD, RAW_SSN, ACTION);
+
+            auditLogger.logRequest(request);
+
+            assertFalse(sinkContents().contains(sensitiveValue),
+                    "Sensitive value must not appear in plaintext: " + sensitiveValue);
+        }
+    }
+
+    @Nested
+    @DisplayName("Redaction must not remove non-sensitive audit information")
+    class NonSensitiveDataPreserved {
+
+        @Test
+        @DisplayName("audit entry is still written")
+        void entryIsWritten() {
+            Request request = new Request(USER_ID, RAW_PASSWORD, RAW_CARD, RAW_SSN, ACTION);
+
+            auditLogger.logRequest(request);
+
+            assertEquals(1, sink.size(), "Exactly one audit entry should be written per request");
+        }
+
+        @Test
+        @DisplayName("non-sensitive identifying fields remain in the audit entry")
+        void nonSensitiveFieldsRetained() {
+            Request request = new Request(USER_ID, RAW_PASSWORD, RAW_CARD, RAW_SSN, ACTION);
+
+            auditLogger.logRequest(request);
+
+            String output = sinkContents();
+            assertAll(
+                    () -> assertTrue(output.contains(USER_ID), "userId should remain in audit log"),
+                    () -> assertTrue(output.contains(ACTION), "action should remain in audit log")
+            );
+        }
+    }
+
+    @Test
+    @DisplayName("redaction does not mutate the original request object")
+    void originalRequestIsNotMutated() {
+        Request request = new Request(USER_ID, RAW_PASSWORD, RAW_CARD, RAW_SSN, ACTION);
+
+        auditLogger.logRequest(request);
+
+        assertAll(
+                () -> assertEquals(RAW_PASSWORD, request.getPassword()),
+                () -> assertEquals(RAW_CARD, request.getCardNumber()),
+                () -> assertEquals(RAW_SSN, request.getSsn())
+        );
+    }
+
+    private String sinkContents() {
+        return String.join("\n", sink);
     }
 }
 ```
@@ -723,21 +688,24 @@ void shouldReportCorrectSize() {
 
 ```java
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.DisplayName;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests for CacheManager's bounded LRU behavior.
+ * Tests for CacheManager's bounded LRU behavior (resolves DEBT2TEST-4).
  *
- * Assumed API (per DEBT2TEST-4 acceptance criteria):
- *   - new CacheManager(int maxSize)  // maxSize must be > 0
+ * Assumed CacheManager API (adjust if the real signatures differ):
+ *   - CacheManager(int maxSize)
  *   - void put(K key, V value)
- *   - V get(K key)                   // returns null if absent/evicted; counts as an access
+ *   - V get(K key)
  *   - boolean containsKey(K key)
  *   - int size()
  *   - int getMaxSize()
+ *
+ * Eviction is expected to be least-recently-used: reads and writes refresh an
+ * entry's recency, and inserting beyond maxSize evicts the least recently used entry.
  */
 class CacheManagerTest {
 
@@ -758,123 +726,117 @@ class CacheManagerTest {
     }
 
     @Test
-    @DisplayName("exposes configured maxSize")
     void shouldExposeConfiguredMaxSize() {
         assertEquals(MAX_SIZE, cacheManager.getMaxSize());
     }
 
     @Test
-    @DisplayName("rejects non-positive maxSize")
     void shouldRejectNonPositiveMaxSize() {
         assertThrows(IllegalArgumentException.class, () -> new CacheManager<String, Integer>(0));
         assertThrows(IllegalArgumentException.class, () -> new CacheManager<String, Integer>(-1));
     }
 
-    @Test
-    @DisplayName("does not evict while size is within maxSize")
-    void shouldNotEvictWithinMaxSize() {
-        cacheManager.put("a", 1);
-        cacheManager.put("b", 2);
-        cacheManager.put("c", 3);
+    @Nested
+    class Eviction {
 
-        assertEquals(MAX_SIZE, cacheManager.size());
-        assertTrue(cacheManager.containsKey("a"));
-        assertTrue(cacheManager.containsKey("b"));
-        assertTrue(cacheManager.containsKey("c"));
-    }
+        @Test
+        void shouldNotEvictWhileWithinMaxSize() {
+            cacheManager.put("a", 1);
+            cacheManager.put("b", 2);
+            cacheManager.put("c", 3);
 
-    @Test
-    @DisplayName("evicts least recently used entry once maxSize is exceeded")
-    void shouldEvictLeastRecentlyUsedWhenMaxSizeExceeded() {
-        cacheManager.put("a", 1);
-        cacheManager.put("b", 2);
-        cacheManager.put("c", 3);
-
-        cacheManager.put("d", 4); // exceeds maxSize; "a" is LRU
-
-        assertEquals(MAX_SIZE, cacheManager.size());
-        assertFalse(cacheManager.containsKey("a"));
-        assertNull(cacheManager.get("a"));
-        assertEquals(2, cacheManager.get("b"));
-        assertEquals(3, cacheManager.get("c"));
-        assertEquals(4, cacheManager.get("d"));
-    }
-
-    @Test
-    @DisplayName("evicts exactly one entry per insert beyond capacity")
-    void shouldEvictExactlyOneEntryPerInsert() {
-        cacheManager.put("a", 1);
-        cacheManager.put("b", 2);
-        cacheManager.put("c", 3);
-
-        cacheManager.put("d", 4);
-        assertEquals(MAX_SIZE, cacheManager.size());
-
-        cacheManager.put("e", 5);
-        assertEquals(MAX_SIZE, cacheManager.size());
-        assertFalse(cacheManager.containsKey("b"));
-        assertFalse(cacheManager.containsKey("c") && !cacheManager.containsKey("d"));
-    }
-
-    @Test
-    @DisplayName("get refreshes access order so recently read entry survives eviction")
-    void shouldRetainRecentlyAccessedEntryOnEviction() {
-        cacheManager.put("a", 1);
-        cacheManager.put("b", 2);
-        cacheManager.put("c", 3);
-
-        assertEquals(1, cacheManager.get("a")); // "a" becomes most recently used
-
-        cacheManager.put("d", 4); // should evict "b", not "a"
-
-        assertTrue(cacheManager.containsKey("a"));
-        assertFalse(cacheManager.containsKey("b"));
-        assertTrue(cacheManager.containsKey("c"));
-        assertTrue(cacheManager.containsKey("d"));
-    }
-
-    @Test
-    @DisplayName("updating an existing key does not trigger eviction")
-    void shouldNotEvictWhenUpdatingExistingKey() {
-        cacheManager.put("a", 1);
-        cacheManager.put("b", 2);
-        cacheManager.put("c", 3);
-
-        cacheManager.put("a", 10); // update, not insert
-
-        assertEquals(MAX_SIZE, cacheManager.size());
-        assertEquals(10, cacheManager.get("a"));
-        assertTrue(cacheManager.containsKey("b"));
-        assertTrue(cacheManager.containsKey("c"));
-    }
-
-    @Test
-    @DisplayName("size stays bounded under sustained memory pressure")
-    void shouldBoundSizeUnderSustainedInserts() {
-        int totalInserts = 10_000;
-        for (int i = 0; i < totalInserts; i++) {
-            cacheManager.put("key-" + i, i);
-            assertTrue(cacheManager.size() <= MAX_SIZE,
-                    "size exceeded maxSize at insert " + i);
+            assertEquals(MAX_SIZE, cacheManager.size());
+            assertTrue(cacheManager.containsKey("a"));
+            assertTrue(cacheManager.containsKey("b"));
+            assertTrue(cacheManager.containsKey("c"));
         }
 
-        assertEquals(MAX_SIZE, cacheManager.size());
-        // Only the most recent MAX_SIZE entries should remain
-        for (int i = totalInserts - MAX_SIZE; i < totalInserts; i++) {
-            assertEquals(i, cacheManager.get("key-" + i));
-        }
-        assertNull(cacheManager.get("key-0"));
-    }
+        @Test
+        void shouldEvictOldestEntryWhenMaxSizeExceeded() {
+            cacheManager.put("a", 1);
+            cacheManager.put("b", 2);
+            cacheManager.put("c", 3);
+            cacheManager.put("d", 4);
 
-    @Test
-    @DisplayName("evicted entries are no longer retrievable")
-    void shouldNotReturnEvictedEntries() {
-        for (int i = 0; i < MAX_SIZE + 5; i++) {
-            cacheManager.put("k" + i, i);
+            assertEquals(MAX_SIZE, cacheManager.size());
+            assertFalse(cacheManager.containsKey("a"), "least recently used entry should be evicted");
+            assertTrue(cacheManager.containsKey("b"));
+            assertTrue(cacheManager.containsKey("c"));
+            assertTrue(cacheManager.containsKey("d"));
         }
 
-        for (int i = 0; i < 5; i++) {
-            assertNull(cacheManager.get("k" + i), "evicted key k" + i + " should be absent");
+        @Test
+        void shouldEvictLeastRecentlyUsedNotLeastRecentlyInserted() {
+            cacheManager.put("a", 1);
+            cacheManager.put("b", 2);
+            cacheManager.put("c", 3);
+
+            // Touch "a" so "b" becomes the least recently used entry
+            assertEquals(1, cacheManager.get("a"));
+
+            cacheManager.put("d", 4);
+
+            assertTrue(cacheManager.containsKey("a"), "recently read entry must survive");
+            assertFalse(cacheManager.containsKey("b"), "least recently used entry should be evicted");
+            assertTrue(cacheManager.containsKey("c"));
+            assertTrue(cacheManager.containsKey("d"));
+        }
+
+        @Test
+        void shouldNotEvictWhenUpdatingExistingKeyAtCapacity() {
+            cacheManager.put("a", 1);
+            cacheManager.put("b", 2);
+            cacheManager.put("c", 3);
+
+            cacheManager.put("a", 100);
+
+            assertEquals(MAX_SIZE, cacheManager.size());
+            assertEquals(100, cacheManager.get("a"));
+            assertTrue(cacheManager.containsKey("b"));
+            assertTrue(cacheManager.containsKey("c"));
+        }
+
+        @Test
+        void shouldReturnNullForEvictedKey() {
+            cacheManager.put("a", 1);
+            cacheManager.put("b", 2);
+            cacheManager.put("c", 3);
+            cacheManager.put("d", 4);
+
+            assertNull(cacheManager.get("a"));
+        }
+
+        @Test
+        void shouldKeepSizeBoundedUnderSustainedMemoryPressure() {
+            int totalInserts = 10_000;
+
+            for (int i = 0; i < totalInserts; i++) {
+                cacheManager.put("key-" + i, i);
+                assertTrue(cacheManager.size() <= MAX_SIZE,
+                        "size must never exceed maxSize, was " + cacheManager.size() + " at insert " + i);
+            }
+
+            assertEquals(MAX_SIZE, cacheManager.size());
+
+            // Only the most recent MAX_SIZE entries should remain
+            for (int i = totalInserts - MAX_SIZE; i < totalInserts; i++) {
+                assertTrue(cacheManager.containsKey("key-" + i), "recent key-" + i + " should be retained");
+            }
+            assertFalse(cacheManager.containsKey("key-0"), "oldest key should be evicted");
+        }
+
+        @Test
+        void shouldEvictInInsertionOrderWhenNoReadsOccur() {
+            for (int i = 0; i < MAX_SIZE + 5; i++) {
+                cacheManager.put("k" + i, i);
+            }
+
+            for (int i = 0; i < 5; i++) {
+                assertFalse(cacheManager.containsKey("k" + i), "k" + i + " should have been evicted");
+            }
+            for (int i = 5; i < MAX_SIZE + 5; i++) {
+                assertTrue(cacheManager.containsKey("k" + i), "k" + i + " should be retained");
+            }
         }
     }
 }
@@ -929,46 +891,48 @@ void shouldNotExceedPoolSizeOnRelease() throws InterruptedException {
 ### Generated Test Case
 
 ```java
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.junit.jupiter.api.Assertions.*;
-
 /**
- * Tests for ConnectionPool concurrent access (DEBT2TEST-3).
+ * Concurrency tests for ConnectionPool (DEBT2TEST-3).
  *
- * Assumes ConnectionPool exposes:
- *   - a constructor ConnectionPool(int size)
- *   - DbConnection getConnection()
- *   - void releaseConnection(DbConnection conn)
- *   - nested static class ConnectionPool.DbConnection
- * and that getConnection() never hands out a connection that is still leased.
+ * Assumptions about the ConnectionPool API (adjust if the real API differs):
+ *   - constructor: new ConnectionPool(int size)
+ *   - DbConnection is a nested type ConnectionPool.DbConnection
+ *   - getConnection() returns a leased connection (it may block or return null when empty)
+ *   - releaseConnection(DbConnection) returns a connection to the pool
  *
- * Thread count is kept <= pool size so each worker holds at most one lease at a time,
- * which makes the invariants deterministic (no reliance on timing for pass/fail).
+ * Identity of leased connections is tracked via ConcurrentHashMap key sets, which rely on
+ * equals/hashCode. If DbConnection overrides equals, switch to an identity-based set.
  */
+@Timeout(value = 60, unit = SECONDS)
 class ConnectionPoolConcurrencyTest {
 
-    private static final int POOL_SIZE = 8;
+    private static final int POOL_SIZE = 10;
     private static final int THREADS = 8;
-    private static final int ITERATIONS_PER_THREAD = 1_000;
+    private static final int ITERATIONS_PER_THREAD = 500;
+    private static final long ACQUIRE_PROBE_MILLIS = 200;
 
     private ConnectionPool connectionPool;
     private ExecutorService executor;
@@ -982,102 +946,155 @@ class ConnectionPoolConcurrencyTest {
     @AfterEach
     void tearDown() throws InterruptedException {
         executor.shutdownNow();
-        executor.awaitTermination(5, TimeUnit.SECONDS);
+        executor.awaitTermination(5, SECONDS);
     }
 
     @Test
-    @Timeout(value = 10, unit = TimeUnit.SECONDS)
-    void shouldNotHandOutSameConnectionTwiceAfterDoubleRelease() {
-        ConnectionPool.DbConnection conn = connectionPool.getConnection();
-        assertNotNull(conn);
-
-        connectionPool.releaseConnection(conn);
-        connectionPool.releaseConnection(conn); // duplicate release must be tolerated
-
-        // Drain the pool: every lease must be distinct, so the double-released
-        // connection must not appear more than once.
-        Set<ConnectionPool.DbConnection> leased = Collections.newSetFromMap(new java.util.IdentityHashMap<>());
-        for (int i = 0; i < POOL_SIZE; i++) {
-            ConnectionPool.DbConnection c = connectionPool.getConnection();
-            assertNotNull(c, "pool should still supply connections after double release");
-            assertTrue(leased.add(c), "same connection leased twice after double release");
-        }
-        assertEquals(POOL_SIZE, leased.size());
-    }
-
-    @Test
-    @Timeout(value = 60, unit = TimeUnit.SECONDS)
-    void concurrentGetAndReleaseShouldNeverDuplicateLeases() throws Exception {
-        Set<ConnectionPool.DbConnection> currentlyLeased =
-                Collections.newSetFromMap(new ConcurrentHashMap<>());
-        ConcurrentLinkedQueue<String> violations = new ConcurrentLinkedQueue<>();
-        AtomicInteger completedOps = new AtomicInteger();
-        CountDownLatch startGate = new CountDownLatch(1);
-
+    void shouldNeverLeaseSameConnectionToTwoThreadsConcurrently() throws Exception {
+        Set<ConnectionPool.DbConnection> currentlyLeased = ConcurrentHashMap.newKeySet();
+        AtomicInteger duplicateLeases = new AtomicInteger();
+        AtomicReference<Throwable> workerFailure = new AtomicReference<>();
+        CountDownLatch start = new CountDownLatch(1);
         List<Future<?>> futures = new ArrayList<>();
+
         for (int t = 0; t < THREADS; t++) {
             futures.add(executor.submit(() -> {
-                startGate.await();
+                start.await();
                 for (int i = 0; i < ITERATIONS_PER_THREAD; i++) {
                     ConnectionPool.DbConnection conn = connectionPool.getConnection();
                     if (conn == null) {
-                        violations.add("getConnection returned null");
-                        return null;
+                        continue;
                     }
                     if (!currentlyLeased.add(conn)) {
-                        violations.add("connection leased to two threads at once");
+                        duplicateLeases.incrementAndGet();
                     }
-                    // Remove from tracking BEFORE releasing so a re-lease cannot race the removal.
                     currentlyLeased.remove(conn);
                     connectionPool.releaseConnection(conn);
-                    completedOps.incrementAndGet();
                 }
                 return null;
             }));
         }
 
-        startGate.countDown();
-        for (Future<?> f : futures) {
-            f.get(50, TimeUnit.SECONDS); // surfaces worker exceptions; bounded wait
-        }
+        start.countDown();
+        awaitAll(futures, workerFailure);
 
-        assertTrue(violations.isEmpty(), "concurrency violations: " + violations);
-        assertEquals(THREADS * ITERATIONS_PER_THREAD, completedOps.get(),
-                "lost operations detected");
+        assertEquals(0, duplicateLeases.get(),
+                "The same connection was leased to more than one thread at the same time");
     }
 
     @Test
-    @Timeout(value = 60, unit = TimeUnit.SECONDS)
-    void noConnectionsAreLostUnderConcurrentChurn() throws Exception {
-        CountDownLatch startGate = new CountDownLatch(1);
+    void shouldNotLoseConnectionsUnderConcurrentAcquireAndRelease() throws Exception {
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicReference<Throwable> workerFailure = new AtomicReference<>();
         List<Future<?>> futures = new ArrayList<>();
+
         for (int t = 0; t < THREADS; t++) {
             futures.add(executor.submit(() -> {
-                startGate.await();
+                start.await();
                 for (int i = 0; i < ITERATIONS_PER_THREAD; i++) {
                     ConnectionPool.DbConnection conn = connectionPool.getConnection();
-                    assertNotNull(conn, "pool exhausted: connection lost or not returned");
-                    connectionPool.releaseConnection(conn);
+                    if (conn != null) {
+                        connectionPool.releaseConnection(conn);
+                    }
                 }
                 return null;
             }));
         }
 
-        startGate.countDown();
-        for (Future<?> f : futures) {
-            f.get(50, TimeUnit.SECONDS);
+        start.countDown();
+        awaitAll(futures, workerFailure);
+
+        // After the workload every connection must be back in the pool: exactly POOL_SIZE
+        // distinct connections must be obtainable, and no more.
+        Set<ConnectionPool.DbConnection> drained = drainPool(POOL_SIZE + 1);
+        assertEquals(POOL_SIZE, drained.size(),
+                "Connections were lost or duplicated after concurrent acquire/release");
+    }
+
+    @Test
+    void shouldNotExceedPoolSizeOnRelease() throws Exception {
+        ConnectionPool.DbConnection conn = connectionPool.getConnection();
+        assertNotNull(conn, "Pool should lease a connection when it is fresh");
+
+        connectionPool.releaseConnection(conn);
+        connectionPool.releaseConnection(conn); // double release must not inflate the pool
+
+        Set<ConnectionPool.DbConnection> drained = drainPool(POOL_SIZE + 1);
+        assertEquals(POOL_SIZE, drained.size(),
+                "Double release must not add duplicate entries to the pool");
+    }
+
+    @Test
+    void shouldServeAllConnectionsWhenReleasedConcurrentlyByManyThreads() throws Exception {
+        // Lease the whole pool on the main thread, then release everything concurrently.
+        List<ConnectionPool.DbConnection> leased = new ArrayList<>();
+        for (int i = 0; i < POOL_SIZE; i++) {
+            ConnectionPool.DbConnection conn = connectionPool.getConnection();
+            assertNotNull(conn, "Pool should lease connection " + i);
+            leased.add(conn);
         }
 
-        // After all churn, the full set of connections must still be obtainable exactly once.
-        Set<ConnectionPool.DbConnection> drained = new HashSet<>();
-        for (int i = 0; i < POOL_SIZE; i++) {
-            ConnectionPool.DbConnection c = assertTimeoutPreemptively(
-                    Duration.ofSeconds(2), connectionPool::getConnection,
-                    "pool exhausted after concurrent churn");
-            assertNotNull(c);
-            assertTrue(drained.add(c), "duplicate connection present after churn");
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicReference<Throwable> workerFailure = new AtomicReference<>();
+        List<Future<?>> futures = new ArrayList<>();
+        for (ConnectionPool.DbConnection conn : leased) {
+            futures.add(executor.submit(() -> {
+                start.await();
+                connectionPool.releaseConnection(conn);
+                return null;
+            }));
         }
-        assertEquals(POOL_SIZE, drained.size(), "connections lost during concurrent churn");
+
+        start.countDown();
+        awaitAll(futures, workerFailure);
+
+        Set<ConnectionPool.DbConnection> drained = drainPool(POOL_SIZE + 1);
+        assertEquals(POOL_SIZE, drained.size(),
+                "Concurrent releases lost connections or created duplicates");
+    }
+
+    /**
+     * Acquires up to maxAttempts connections, each probed on a worker thread with a short
+     * timeout so that a blocking pool cannot hang the test. Returns the distinct connections
+     * obtained. Note: a timed-out probe is cancelled with interruption; if getConnection()
+     * later completes anyway, that connection is not returned to the test.
+     */
+    private Set<ConnectionPool.DbConnection> drainPool(int maxAttempts) throws Exception {
+        Set<ConnectionPool.DbConnection> distinct = ConcurrentHashMap.newKeySet();
+        for (int i = 0; i < maxAttempts; i++) {
+            ConnectionPool.DbConnection conn = tryAcquire();
+            if (conn == null) {
+                break;
+            }
+            distinct.add(conn);
+        }
+        return distinct;
+    }
+
+    private ConnectionPool.DbConnection tryAcquire() throws Exception {
+        Future<ConnectionPool.DbConnection> probe = executor.submit(connectionPool::getConnection);
+        try {
+            return probe.get(ACQUIRE_PROBE_MILLIS, MILLISECONDS);
+        } catch (TimeoutException e) {
+            probe.cancel(true);
+            return null;
+        } catch (ExecutionException e) {
+            throw new AssertionError("getConnection() failed unexpectedly", e.getCause());
+        }
+    }
+
+    private void awaitAll(List<Future<?>> futures, AtomicReference<Throwable> workerFailure)
+            throws Exception {
+        for (Future<?> future : futures) {
+            try {
+                future.get(30, SECONDS);
+            } catch (ExecutionException e) {
+                workerFailure.compareAndSet(null, e.getCause());
+            }
+        }
+        if (workerFailure.get() != null) {
+            throw new AssertionError("Worker thread failed", workerFailure.get());
+        }
     }
 }
 ```
@@ -1132,75 +1149,61 @@ Acceptance Criteria:
 ```java
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * Tests for the batched customer lookup in OrderRepository.findOrdersForCustomers().
- *
- * Replaces the legacy test that pinned the N+1 behavior (one query per customer).
- * Once the loop is replaced with a single "WHERE customer_id IN (...)" query, the
- * legacy assertion of 3 queries for 3 customers must no longer hold.
- */
 class OrderRepositoryBatchedLookupTest {
 
     private OrderRepository orderRepository;
 
     @BeforeEach
     void setUp() {
-        // Assumes a fresh repository per test so the query counter starts at zero.
+        // Fresh instance so the query counter starts at zero for every test.
         orderRepository = new OrderRepository();
     }
 
     @Test
-    void findOrdersForCustomersIssuesSingleQueryForMultipleCustomers() {
+    void multiCustomerLookupIssuesExactlyOneBatchedQuery() {
         orderRepository.findOrdersForCustomers(List.of("c1", "c2", "c3"));
 
         assertEquals(1, orderRepository.getQueryCount(),
-                "A multi-customer lookup must be satisfied by one batched query, not one per customer");
+                "Expected a single batched query (e.g. WHERE customer_id IN (...)) for multiple customers");
     }
 
-    @Test
-    void findOrdersForCustomersIssuesSingleQueryRegardlessOfInputSize() {
-        List<String> customerIds = IntStream.rangeClosed(1, 250)
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 3, 10, 50, 500})
+    void queryCountIsConstantRegardlessOfInputSize(int customerCount) {
+        List<String> customerIds = IntStream.rangeClosed(1, customerCount)
                 .mapToObj(i -> "c" + i)
                 .collect(Collectors.toList());
 
         orderRepository.findOrdersForCustomers(customerIds);
 
         assertEquals(1, orderRepository.getQueryCount(),
-                "Query count must not scale with the number of customer IDs");
+                "Query count must not scale with the number of customers (" + customerCount + ")");
     }
 
     @Test
-    void findOrdersForCustomersIssuesSingleQueryForSingleCustomer() {
-        orderRepository.findOrdersForCustomers(List.of("c1"));
+    void batchedLookupDoesNotThrowForMultipleCustomers() {
+        List<String> customerIds = List.of("c1", "c2", "c3", "c4");
 
-        assertEquals(1, orderRepository.getQueryCount(),
-                "A single customer lookup should still use exactly one batched query");
+        assertDoesNotThrow(() -> orderRepository.findOrdersForCustomers(customerIds));
     }
 
     @Test
-    void findOrdersForCustomersWithEmptyInputDoesNotIssueMoreThanOneQuery() {
+    void emptyCustomerListDoesNotIssuePerCustomerQueries() {
         orderRepository.findOrdersForCustomers(List.of());
 
         assertTrue(orderRepository.getQueryCount() <= 1,
-                "An empty customer list must not trigger per-customer queries");
-    }
-
-    @Test
-    void findOrdersForCustomersReturnsResultsForAllRequestedCustomers() {
-        var result = orderRepository.findOrdersForCustomers(List.of("c1", "c2", "c3"));
-
-        assertNotNull(result, "Batched lookup should return a result for the requested customers");
-        assertEquals(1, orderRepository.getQueryCount(),
-                "Result retrieval must still be backed by a single batched query");
+                "An empty input should issue at most one (or zero) queries");
     }
 }
 ```
@@ -1255,35 +1258,22 @@ Acceptance Criteria:
 ### Generated Test Case
 
 ```java
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
 /**
- * Tests for {@link AuditLogger}.
+ * Characterization tests for {@link AuditLogger}.
  *
- * <p><b>Known technical debt (DEBT2TEST-6):</b> {@link AuditLogger#logRequest} writes the
- * full request via {@code toString()}, so raw passwords and card numbers reach the log sink
- * in plaintext. This is a compliance risk (PCI-DSS / GDPR) because logs are shipped to a
- * third-party aggregator. See the related FIXME from the 2023 audit-trail rollout.
+ * <p><b>Known compliance debt (DEBT2TEST-6):</b> {@code AuditLogger.logRequest()} currently
+ * serializes the full request object via {@code toString()}. Sensitive fields such as
+ * passwords and card numbers are written to the audit log in plaintext. Logs are shipped to a
+ * third-party aggregator, which creates a PCI-DSS and GDPR compliance risk. This was introduced
+ * during the 2023 audit-trail rollout.
  *
- * <p>The test {@link #currentlyLogsSensitiveFieldsInPlaintext()} is intentionally a
- * <em>characterization test</em>. It does not endorse the current behavior. It pins the
- * existing unredacted output so that:
- * <ul>
- *   <li>the current behavior is explicitly documented and visible in the suite, and</li>
- *   <li>any change to logging output is detected deliberately rather than silently.</li>
- * </ul>
- *
- * <p><b>Removal plan:</b> once a redaction step (field allowlist or masking) is added before
- * any object is logged, this test must be inverted. The assertions should verify that the
- * sensitive values are <em>absent</em> from the entry. The disabled test
- * {@link #redactsSensitiveFieldsBeforeLogging()} below is the target replacement. Remove the
- * {@code @Disabled} annotation and delete the characterization test when redaction ships.
+ * <p>The tests in this class pin that current, unredacted behavior so the defect is visible in
+ * the test suite rather than silently assumed to be correct.
  */
 class AuditLoggerTest {
 
@@ -1295,48 +1285,36 @@ class AuditLoggerTest {
     }
 
     /**
-     * Characterization test for DEBT2TEST-6.
+     * Pins the current unredacted logging behavior.
      *
-     * <p><b>Why this asserts plaintext:</b> the logger currently has no redaction step, so the
-     * password {@code s3cr3t} and card number {@code 4111111111111111} appear verbatim in the
-     * logged entry. This assertion documents that fact. It is a known violation of the
-     * acceptance criteria ("sensitive fields never reach the log sink in plaintext") and
-     * exists only to make the current behavior explicit until redaction is implemented.
+     * <p><b>Why this test asserts plaintext sensitive values:</b> it is a characterization test.
+     * It documents that {@code logRequest()} currently writes the raw password ("s3cr3t") and raw
+     * card number ("4111111111111111") into the logged entry. It does not assert that this is
+     * desirable. It exists so that the existing behavior is explicitly recorded and so that any
+     * change to logging is detected.
      *
-     * <p><b>Action required:</b> this test must be inverted (or deleted and replaced by
-     * {@link #redactsSensitiveFieldsBeforeLogging()}) when redaction is introduced. Leaving it
-     * in place after redaction ships will fail the build, which is intentional.
+     * <p><b>Why it must be inverted:</b> once a redaction step (field allowlist or masking) is
+     * introduced before any object is logged, this test becomes a regression that enforces the
+     * defect. It must then be replaced with assertions that sensitive values do NOT appear in
+     * plaintext, for example:
+     * <pre>{@code
+     * assertFalse(entry.contains("s3cr3t"));
+     * assertFalse(entry.contains("4111111111111111"));
+     * assertTrue(entry.contains("alice"));
+     * }</pre>
+     *
+     * <p>Until that change lands, a failure of this test that is caused by redaction is expected
+     * and should be treated as the signal to update this test, not as a reason to revert the
+     * redaction.
      */
     @Test
-    @DisplayName("DEBT2TEST-6: characterizes current unredacted logging of sensitive fields")
     void currentlyLogsSensitiveFieldsInPlaintext() {
         auditLogger.logRequest(new AuditLogger.Request("alice", "s3cr3t", "4111111111111111"));
         String entry = auditLogger.getLoggedEntries().get(0);
 
-        // Pins current behavior: raw sensitive values are logged in plaintext (known debt).
+        // Current (defective) behavior: raw sensitive values appear in the log entry.
         assertTrue(entry.contains("s3cr3t"));
         assertTrue(entry.contains("4111111111111111"));
-    }
-
-    /**
-     * Target test for DEBT2TEST-6. Disabled until redaction exists.
-     *
-     * <p>This is the inverted form of {@link #currentlyLogsSensitiveFieldsInPlaintext()} and
-     * matches the acceptance criterion: "Unit test asserts logged output does not contain raw
-     * sensitive values." Enable it, and delete the characterization test, when the redaction
-     * step is implemented.
-     */
-    @Test
-    @Disabled("DEBT2TEST-6: enable once redaction of sensitive fields is implemented")
-    @DisplayName("Redacts password and card number before logging")
-    void redactsSensitiveFieldsBeforeLogging() {
-        auditLogger.logRequest(new AuditLogger.Request("alice", "s3cr3t", "4111111111111111"));
-        String entry = auditLogger.getLoggedEntries().get(0);
-
-        assertFalse(entry.contains("s3cr3t"), "Password must not appear in plaintext in the log");
-        assertFalse(entry.contains("4111111111111111"), "Card number must not appear in plaintext in the log");
-        // Non-sensitive fields should still be logged for auditing purposes.
-        assertTrue(entry.contains("alice"));
     }
 }
 ```
@@ -1391,103 +1369,76 @@ The payment gateway timeout is hardcoded ({{GATEWAY_TIMEOUT_MS = 5000}}) directl
 
 ```java
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import java.time.Duration;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 /*
- * Assumed production API (per DEBT2TEST-2 acceptance criteria):
- *   - PaymentConfig(long gatewayTimeoutMs, int maxRetryAttempts)  -- injectable configuration
- *   - PaymentProcessor(PaymentConfig config)                      -- configuration via constructor
- *   - PaymentProcessor.Order(String id, double amount)
- *   - PaymentProcessor.PaymentResult with success()
- * Adjust the constructor/config types if the actual signatures differ.
+ * Retry-path tests for PaymentProcessor (DEBT2TEST-2).
+ *
+ * Assumptions about the existing API (based on the method under test):
+ *   - PaymentProcessor has an accessible no-arg constructor.
+ *   - PaymentProcessor.Order(String id, double amount) exists.
+ *   - PaymentProcessor.process(Order) returns PaymentResult.
+ *   - PaymentProcessor.PaymentResult exposes success().
+ *
+ * The retry count and gateway timeout are still hardcoded (GATEWAY_TIMEOUT_MS = 5000,
+ * MAX_RETRY_ATTEMPTS). These tests exercise the retry path through observable
+ * behavior only. Once the configuration object is injected, add tests that
+ * supply custom timeout and retry values and verify the exact attempt count.
  */
 class PaymentProcessorRetryTest {
 
-    private static final long TEST_GATEWAY_TIMEOUT_MS = 50L;
-    private static final int TEST_MAX_RETRY_ATTEMPTS = 3;
+    private static final long HARDCODED_GATEWAY_TIMEOUT_MS = 5000L;
 
     private PaymentProcessor paymentProcessor;
 
     @BeforeEach
     void setUp() {
-        // Injected configuration replaces the hardcoded GATEWAY_TIMEOUT_MS = 5000
-        PaymentConfig config = new PaymentConfig(TEST_GATEWAY_TIMEOUT_MS, TEST_MAX_RETRY_ATTEMPTS);
-        paymentProcessor = new PaymentProcessor(config);
+        paymentProcessor = new PaymentProcessor();
     }
 
     @Test
-    @DisplayName("Negative amount fails after retries using injected config")
     void shouldFailOnNegativeAmountAfterRetries() {
         PaymentProcessor.Order order = new PaymentProcessor.Order("order-2", -50.0);
-
         PaymentProcessor.PaymentResult result = paymentProcessor.process(order);
+        assertFalse(result.success());
+    }
 
+    @ParameterizedTest
+    @ValueSource(doubles = {-0.01, -1.0, -50.0, -1000.0})
+    void shouldFailForAnyNegativeAmountAfterRetries(double amount) {
+        PaymentProcessor.Order order = new PaymentProcessor.Order("order-neg", amount);
+        PaymentProcessor.PaymentResult result = paymentProcessor.process(order);
+        assertFalse(result.success(),
+                "Negative amount " + amount + " must not succeed after retries");
+    }
+
+    @Test
+    void shouldNotThrowWhenRetryingNegativeAmount() {
+        PaymentProcessor.Order order = new PaymentProcessor.Order("order-throw", -50.0);
+        assertDoesNotThrow(() -> paymentProcessor.process(order));
+    }
+
+    @Test
+    void shouldReturnWithinGatewayTimeoutWhenRetryingNegativeAmount() {
+        PaymentProcessor.Order order = new PaymentProcessor.Order("order-timing", -50.0);
+        assertTimeoutPreemptively(Duration.ofMillis(HARDCODED_GATEWAY_TIMEOUT_MS), () -> {
+            PaymentProcessor.PaymentResult result = paymentProcessor.process(order);
+            assertFalse(result.success());
+        });
+    }
+
+    @Test
+    void shouldReturnFailedResultObjectNotNullForNegativeAmount() {
+        PaymentProcessor.Order order = new PaymentProcessor.Order("order-nonnull", -50.0);
+        PaymentProcessor.PaymentResult result = paymentProcessor.process(order);
         assertNotNull(result);
         assertFalse(result.success());
-    }
-
-    @ParameterizedTest(name = "negative amount {0} is rejected")
-    @ValueSource(doubles = {-0.01, -1.0, -50.0, -1000.0})
-    @DisplayName("Various negative amounts are rejected on the retry path")
-    void shouldFailForAnyNegativeAmount(double amount) {
-        PaymentProcessor.Order order = new PaymentProcessor.Order("order-neg", amount);
-
-        PaymentProcessor.PaymentResult result = paymentProcessor.process(order);
-
-        assertFalse(result.success());
-    }
-
-    @Nested
-    @DisplayName("With zero retry attempts configured")
-    class ZeroRetryConfiguration {
-
-        private PaymentProcessor noRetryProcessor;
-
-        @BeforeEach
-        void setUpNoRetry() {
-            PaymentConfig config = new PaymentConfig(TEST_GATEWAY_TIMEOUT_MS, 0);
-            noRetryProcessor = new PaymentProcessor(config);
-        }
-
-        @Test
-        @DisplayName("Negative amount still fails when no retries are allowed")
-        void shouldFailOnNegativeAmountWithoutRetries() {
-            PaymentProcessor.Order order = new PaymentProcessor.Order("order-no-retry", -50.0);
-
-            PaymentProcessor.PaymentResult result = noRetryProcessor.process(order);
-
-            assertFalse(result.success());
-        }
-    }
-
-    @Nested
-    @DisplayName("With short gateway timeout configured")
-    class ShortTimeoutConfiguration {
-
-        private PaymentProcessor shortTimeoutProcessor;
-
-        @BeforeEach
-        void setUpShortTimeout() {
-            PaymentConfig config = new PaymentConfig(1L, TEST_MAX_RETRY_ATTEMPTS);
-            shortTimeoutProcessor = new PaymentProcessor(config);
-        }
-
-        @Test
-        @DisplayName("Negative amount fails quickly under a short injected timeout")
-        void shouldFailOnNegativeAmountWithShortTimeout() {
-            PaymentProcessor.Order order = new PaymentProcessor.Order("order-short", -50.0);
-
-            PaymentProcessor.PaymentResult result = shortTimeoutProcessor.process(order);
-
-            assertFalse(result.success());
-        }
     }
 }
 ```

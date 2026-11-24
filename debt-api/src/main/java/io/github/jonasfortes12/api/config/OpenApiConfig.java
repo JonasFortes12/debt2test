@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import io.github.jonasfortes12.api.access.web.AccessSecurity;
+import io.github.jonasfortes12.api.access.web.StudyKey;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
@@ -47,6 +48,13 @@ public class OpenApiConfig {
                         * `403`: the code has already started its run.
                         * `404`: the run does not exist or was not started by this code.
 
+                        ### Study service key
+                        For research scripts only. When the server is configured with a study service key, \
+                        sending it as `X-Study-Key` replaces the access code on every `/api/pipeline/**` call: no \
+                        code is needed or spent, no participant quota is used, and runs started this way are \
+                        recorded as triggered by `study`. The same key reads, polls and cancels any run. When the \
+                        server has no key (the default) the header is ignored, and a wrong key is treated as no key.
+
                         ### How to use it
                         1. `POST /api/pipeline/runs` (with the access code) starts a run and answers `202` with its \
                         `executionId`.\n
@@ -84,7 +92,15 @@ public class OpenApiConfig {
                                                                 .bearerFormat("D2T access code")
                                                                 .description("Single-run access code from the email sent "
                                                                                 + "by POST /api/access/requests, e.g. "
-                                                                                + "D2T-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX.")));
+                                                                                + "D2T-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX."))
+                                                .addSecuritySchemes(StudyKey.SCHEME,
+                                                new SecurityScheme()
+                                                                .type(SecurityScheme.Type.APIKEY)
+                                                                .in(SecurityScheme.In.HEADER)
+                                                                .name(StudyKey.HEADER)
+                                                                .description("Optional service key for research scripts, "
+                                                                                + "accepted instead of an access code when the server has "
+                                                                                + "DEBT_STUDY_API_KEY set.")));
         }
 
         /**
@@ -112,7 +128,7 @@ public class OpenApiConfig {
                 return openApi -> openApi.getPaths().values().forEach(path -> path.readOperations().stream()
                                 .filter(operation -> operation.getSecurity() != null && !operation.getSecurity().isEmpty())
                                 .forEach(operation -> operation.getResponses().computeIfAbsent("401", status -> new ApiResponse()
-                                                .description("No access code was sent, or it is unknown or expired. "
+                                                .description("No access code (or valid study service key) was sent, or the code is unknown or expired. "
                                                                 + "Get a new one from POST /api/access/requests.")
                                                 .content(new Content().addMediaType("application/json", new MediaType()
                                                                 .schema(new Schema<>().$ref("#/components/schemas/ApiError"))

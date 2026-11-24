@@ -17,7 +17,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 /**
- * Guards {@code /api/pipeline/**}. Starting a run needs an UNUSED code (the controller then spends
+ * Guards {@code /api/pipeline/**}, except for a request carrying the study service key (see
+ * {@link StudyKey}), which skips the access-code checks below. Starting a run needs an UNUSED code (the controller then spends
  * it); every endpoint that names a run needs the USED code that started that run. A code for any
  * other run gets the same 404 as an unknown run, so a code cannot probe which runs exist. Failures
  * are thrown, so they reach the client through {@code ApiExceptionHandler} as an {@code ApiError}.
@@ -27,14 +28,20 @@ public class AccessCodeInterceptor implements HandlerInterceptor {
     private static final String EXECUTION_ID = "executionId";
 
     private final AccessService accessService;
+    private final StudyKey studyKey;
 
-    public AccessCodeInterceptor(AccessService accessService) {
+    public AccessCodeInterceptor(AccessService accessService, StudyKey studyKey) {
         this.accessService = accessService;
+        this.studyKey = studyKey;
     }
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         if (CorsUtils.isPreFlightRequest(request)) {
+            return true;
+        }
+        if (studyKey.accepts(request.getHeader(StudyKey.HEADER))) {
+            request.setAttribute(StudyKey.REQUEST_ATTRIBUTE, Boolean.TRUE);
             return true;
         }
         AuthenticatedCode code = accessService.authenticate(BearerTokens.from(request.getHeader(HttpHeaders.AUTHORIZATION)))

@@ -147,6 +147,17 @@ class DatabasePipelineRunStoreReadTest {
     }
 
     @Test
+    void runTriggeredByRecordsTheTrigger() {
+        UUID id = UUID.randomUUID();
+        PipelineRunEntity runEntity = run(id, RunStatus.QUEUED);
+        when(runs.findByIdForUpdate(id)).thenReturn(Optional.of(runEntity));
+
+        store.runTriggeredBy(id.toString(), "study");
+
+        assertEquals("study", runEntity.getTriggeredBy());
+    }
+
+    @Test
     void findRunReturnsEmptyForAMalformedExecutionIdWithoutQueryingTheRepository() {
         assertTrue(store.findRun("not-a-uuid").isEmpty());
     }

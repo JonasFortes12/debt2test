@@ -152,4 +152,12 @@ class AccessCodeInterceptorTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"));
     }
+
+    @Test
+    void studyKeyHeaderIsIgnoredWhenNoKeyIsConfigured() throws Exception {
+        when(accessService.authenticate(any())).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/api/pipeline/runs/" + OTHER_RUN).header("X-Study-Key", "anything"))
+                .andExpect(status().isUnauthorized());
+    }
 }
