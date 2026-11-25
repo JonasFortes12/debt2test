@@ -34,7 +34,7 @@ public class TechnicalDebtEntity {
     @JoinColumn(name = "pipeline_run_id", nullable = false)
     private PipelineRunEntity run;
 
-    @Column(name = "candidate_id", nullable = false)
+    @Column(name = "candidate_id", nullable = false, columnDefinition = "text")
     private String candidateId;
 
     @Column(name = "file_path", nullable = false, columnDefinition = "text")

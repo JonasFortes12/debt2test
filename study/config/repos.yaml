@@ -1,0 +1,53 @@
+# Study definition. Secrets never go here: only the NAMES of environment variables (read from the
+# environment or a .env file). Fill in repos and full commit SHAs before running 1_run.py.
+
+api:
+  base_url_env: DEBT_STUDY_API_URL # e.g. http://localhost:8182
+  key_env: DEBT_STUDY_API_KEY # same value as the server's DEBT_STUDY_API_KEY
+db:
+  url_env: DEBT_STUDY_DB_URL # postgresql://readonly_user:pw@host:5434/debt2test (read-only user)
+
+study:
+  repetitions: 1 # per (repo, condition); set 1 while testing
+  max_attempts: 2 # per unit: attempts for FAILED / CANCELLED / lost runs
+  poll_seconds: 10
+  run_timeout_minutes: 60
+  seed: 42 # sampling and A/B shuffling
+  allow_heuristic_fallback: false
+  test_framework: JUnit 5
+
+# Informational: the model is configured on the SERVER (DEBT_TESTER_*), not per request. It is written
+# to the manifest so each run is traceable; collect.py also records the model the database saw.
+model:
+  provider: anthropic
+  name: claude-haiku-5-5
+  temperature: 0
+
+sample:
+  qp34_size: 10 # MATCHED group-B items, annotated for QP3 and QP4
+  qp2_size: 10 # SATD items from groups A and B (no MATCHED filter), QP2
+  overlap: 0.2 # share of items annotated by both annotators (kappa)
+
+annotators: [researcher, advisor]
+
+# group A: QP1/QP2, runs only no_context.   group B: QP3/QP4, public Jira, runs both conditions.
+repos:
+  - id: jenkins
+    url: https://github.com/jenkinsci/jenkins
+    sha: "845e268813f9588ee59a646b79c75a8f524b1f52"
+    group: A
+  - id: wildfly
+    url: https://github.com/wildfly/wildfly
+    sha: "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    group: B
+    jira:
+      base_url: https://redhat.atlassian.net
+
+  # - id: some-apache-project
+  #   url: https://github.com/apache/<project>
+  #   sha: "<full sha>"
+  #   group: B
+  #   jira:
+  #     base_url: https://issues.apache.org/jira
+  #     email_env: JIRA_APACHE_EMAIL     # omit both for a public Jira
+  #     token_env: JIRA_APACHE_TOKEN

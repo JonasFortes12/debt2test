@@ -283,6 +283,17 @@ class RunStoreRoundTripIntegrationTest {
         }
 
         @Test
+        void aCandidateIdLongerThan255CharactersIsStored() {
+                String executionId = UUID.randomUUID().toString();
+                String longId = "run-1:" + "src/main/java/very/deep/package/".repeat(10) + "File.java:12:5:method:Cls:sig";
+                assertTrue(longId.length() > 255);
+                store.runStarted(executionId, request());
+                store.candidatesExtracted(executionId, List.of(candidate(longId, 12)));
+
+                assertEquals(longId, debts.findAll().get(0).getCandidateId());
+        }
+
+        @Test
         void classificationUpdatesTheExistingRowRatherThanInserting() {
                 String executionId = UUID.randomUUID().toString();
                 store.runStarted(executionId, request());

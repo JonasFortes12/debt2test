@@ -20,7 +20,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -72,17 +71,20 @@ class AccessControllerTest {
                     return request;
                 }))
                 .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.message").value("If the address can receive email, a message has been sent to it."));
+                .andExpect(jsonPath("$.message")
+                        .value("If the address can receive email, a message has been sent to it."));
 
         verify(accessService).requestCode("Ana", "ana@example.com", "v1", "203.0.113.7");
     }
 
     @Test
     void requestAnswers202EvenWhenQuotaReached() throws Exception {
-        // The service reports nothing about quota or cooldown: the response cannot differ.
+        // The service reports nothing about quota or cooldown: the response cannot
+        // differ.
         mockMvc.perform(post("/api/access/requests").contentType(MediaType.APPLICATION_JSON).content(VALID_REQUEST))
                 .andExpect(status().isAccepted())
-                .andExpect(jsonPath("$.message").value("If the address can receive email, a message has been sent to it."));
+                .andExpect(jsonPath("$.message")
+                        .value("If the address can receive email, a message has been sent to it."));
     }
 
     @Test
@@ -111,7 +113,8 @@ class AccessControllerTest {
 
         mockMvc.perform(post("/api/access/requests").contentType(MediaType.APPLICATION_JSON).content(VALID_REQUEST))
                 .andExpect(status().isTooManyRequests())
-                .andExpect(jsonPath("$.message").value("too many access-code requests from this address; try again later"));
+                .andExpect(jsonPath("$.message")
+                        .value("too many access-code requests from this address; try again later"));
     }
 
     @Test
