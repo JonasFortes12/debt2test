@@ -1,290 +1,1289 @@
-[
-  {
-    "filePath": "src/main/java/io/github/jonasfortes12/samples/debt/auth/LoginService.java",
-    "methodName": "authenticate",
-    "lineNumber": 9,
-    "comment": "* TODO DEBT2TEST-1: refactor this; legacy MD5 hashing is an ugly workaround and\n     * password hashing should be redesigned around bcrypt (workFactor\u003d12) or Argon2.",
-    "methodSourceCode": "/**\n * TODO DEBT2TEST-1: refactor this; legacy MD5 hashing is an ugly workaround and\n * password hashing should be redesigned around bcrypt (workFactor\u003d12) or Argon2.\n */\npublic boolean authenticate(String username, String password) {\n    if (username \u003d\u003d null || username.isEmpty()) {\n        return false;\n    }\n    String passwordHash \u003d legacyMd5Hash(password);\n    return validateHash(username, passwordHash);\n}",
-    "isSatd": true,
-    "debtType": "DESIGN",
-    "confidence": 0.4,
-    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/main/java/io/github/jonasfortes12/samples/debt/auth/LoginService.java:9:5:authenticate:LoginService:authenticate(String, String)",
-    "contextStatus": "MATCHED",
-    "issueReferences": [
-      {
-        "value": "DEBT2TEST-1",
-        "source": "comment"
-      }
-    ],
-    "externalTask": {
-      "provider": "jira",
-      "key": "DEBT2TEST-1",
-      "summary": "Migrate MD5 to bcrypt",
-      "description": "Authentication currently hashes passwords with MD5, which is cryptographically broken and unsuitable for password storage.\n\n*Debt context (SATD):* {{LoginService.authenticate()}} — comment flags this as legacy code from 2015 with ~15% performance overhead on login attempts.\n\n*Acceptance Criteria:*\n\n* Replace {{legacyMd5Hash}} with bcrypt (workFactor\u003d12) or Argon2.\n* Existing stored hashes are migrated or re-hashed on next successful login.\n* Unit tests cover authentication with the new hashing scheme.",
-      "acceptanceCriteria": [],
-      "labels": [],
-      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-1"
+{
+  "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+  "status": "FAILED",
+  "errors": [
+    {
+      "stage": "extraction",
+      "code": "JAVA_PARSE_FAILED",
+      "candidateId": null,
+      "recoverable": true,
+      "message": "pipeline error recorded"
     },
-    "classificationProvenance": {
-      "provider": "DebtHunter",
-      "strategy": "model",
-      "version": "configured"
+    {
+      "stage": "extraction",
+      "code": "CANDIDATE_INVALID",
+      "candidateId": null,
+      "recoverable": true,
+      "message": "pipeline error recorded"
     },
-    "errors": [],
-    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
-    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
-  },
-  {
-    "filePath": "src/main/java/io/github/jonasfortes12/samples/debt/database/OrderRepository.java",
-    "methodName": "findOrdersForCustomers",
-    "lineNumber": 12,
-    "comment": "TODO DEBT2TEST-7: refactor this; one query per customer is an ugly workaround (N+1)\nand should be redesigned as a single batched IN (...) query.",
-    "methodSourceCode": "// TODO DEBT2TEST-7: refactor this; one query per customer is an ugly workaround (N+1)\n// and should be redesigned as a single batched IN (...) query.\npublic List\u003cString\u003e findOrdersForCustomers(List\u003cString\u003e customerIds) {\n    List\u003cString\u003e orders \u003d new ArrayList\u003c\u003e();\n    for (String customerId : customerIds) {\n        orders.addAll(findOrdersByCustomer(customerId));\n    }\n    return orders;\n}",
-    "isSatd": true,
-    "debtType": "DESIGN",
-    "confidence": 0.4,
-    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/main/java/io/github/jonasfortes12/samples/debt/database/OrderRepository.java:12:5:findOrdersForCustomers:OrderRepository:findOrdersForCustomers(List)",
-    "contextStatus": "MATCHED",
-    "issueReferences": [
-      {
-        "value": "DEBT2TEST-7",
-        "source": "comment"
-      }
-    ],
-    "externalTask": {
-      "provider": "jira",
-      "key": "DEBT2TEST-7",
-      "summary": "Batch OrderRepository customer lookups to remove N+1 queries",
-      "description": "OrderRepository.findOrdersForCustomers() loops over customer IDs and issues one simulated query per customer instead of a single batched lookup, causing an N+1 query pattern.\n\nDebt context (SATD): OrderRepository — TODO comment notes this was written for a single-customer admin screen and was never revisited when the bulk \"customer orders export\" feature reused it, where it now issues hundreds of queries per export.\n\nAcceptance Criteria:\n\n* Replace the per-ID loop with a single batched query (e.g., WHERE customer_id IN (...)).\n* findOrdersForCustomers() issues one query regardless of input size.\n* Test covers a multi-customer call and asserts the query/call count.",
-      "acceptanceCriteria": [],
-      "labels": [],
-      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-7"
+    {
+      "stage": "generation",
+      "code": "LLM_RESPONSE_INVALID",
+      "candidateId": null,
+      "recoverable": false,
+      "message": "pipeline error recorded"
+    }
+  ],
+  "items": [
+    {
+      "filePath": "appclient/src/main/java/org/jboss/as/appclient/subsystem/ApplicationClientConfigurationPersister.java",
+      "methodName": "snapshot",
+      "lineNumber": 98,
+      "comment": "TODO once WFCORE-6362 is integrated remove this method",
+      "methodSourceCode": "// TODO once WFCORE-6362 is integrated remove this method\npublic String snapshot() throws ConfigurationPersistenceException {\n    return null;\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:appclient/src/main/java/org/jboss/as/appclient/subsystem/ApplicationClientConfigurationPersister.java:98:5:snapshot:ApplicationClientConfigurationPersister:snapshot()",
+      "contextStatus": "MATCHED",
+      "issueReferences": [
+        {
+          "value": "WFCORE-6362",
+          "source": "comment"
+        }
+      ],
+      "externalTask": {
+        "provider": "jira",
+        "key": "WFCORE-6362",
+        "summary": "Remove deprecated misc parsing and persistence API",
+        "description": null,
+        "acceptanceCriteria": [],
+        "labels": [],
+        "url": "https://redhat.atlassian.net/browse/WFCORE-6362"
+      },
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
     },
-    "classificationProvenance": {
-      "provider": "DebtHunter",
-      "strategy": "model",
-      "version": "configured"
+    {
+      "filePath": "appclient/src/main/java/org/jboss/as/appclient/subsystem/ApplicationClientConfigurationPersister.java",
+      "methodName": "registerSubsystemWriter",
+      "lineNumber": 113,
+      "comment": "TODO once WFCORE-6362 is integrated remove this method",
+      "methodSourceCode": "// TODO once WFCORE-6362 is integrated remove this method\npublic void registerSubsystemWriter(final String name, final XMLElementWriter\u003cSubsystemMarshallingContext\u003e writer) {\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:appclient/src/main/java/org/jboss/as/appclient/subsystem/ApplicationClientConfigurationPersister.java:113:5:registerSubsystemWriter:ApplicationClientConfigurationPersister:registerSubsystemWriter(String, XMLElementWriter)",
+      "contextStatus": "MATCHED",
+      "issueReferences": [
+        {
+          "value": "WFCORE-6362",
+          "source": "comment"
+        }
+      ],
+      "externalTask": {
+        "provider": "jira",
+        "key": "WFCORE-6362",
+        "summary": "Remove deprecated misc parsing and persistence API",
+        "description": null,
+        "acceptanceCriteria": [],
+        "labels": [],
+        "url": "https://redhat.atlassian.net/browse/WFCORE-6362"
+      },
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
     },
-    "errors": [],
-    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
-    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
-  },
-  {
-    "filePath": "src/main/java/io/github/jonasfortes12/samples/debt/logging/AuditLogger.java",
-    "methodName": "logRequest",
-    "lineNumber": 14,
-    "comment": "* FIXME DEBT2TEST-6: bug, logged entries contain the raw password and card number in plaintext.\n     * The request is logged via toString() with no redaction step.",
-    "methodSourceCode": "/**\n * FIXME DEBT2TEST-6: bug, logged entries contain the raw password and card number in plaintext.\n * The request is logged via toString() with no redaction step.\n */\npublic void logRequest(Request request) {\n    sink.add(request.toString());\n}",
-    "isSatd": true,
-    "debtType": "DESIGN",
-    "confidence": 0.4,
-    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/main/java/io/github/jonasfortes12/samples/debt/logging/AuditLogger.java:14:5:logRequest:AuditLogger:logRequest(Request)",
-    "contextStatus": "MATCHED",
-    "issueReferences": [
-      {
-        "value": "DEBT2TEST-6",
-        "source": "comment"
-      }
-    ],
-    "externalTask": {
-      "provider": "jira",
-      "key": "DEBT2TEST-6",
-      "summary": "Redact sensitive data from audit logs",
-      "description": "AuditLogger.logRequest() writes full request objects to the log via toString(), including raw passwords and credit card numbers, in plaintext.\n\nDebt context (SATD): AuditLogger — FIXME comment flags this as a compliance risk (PCI-DSS/GDPR) introduced during the 2023 audit-trail rollout, since logs are shipped to a third-party aggregator.\n\nAcceptance Criteria:\n\n* Introduce a redaction step (field allowlist or masking) before any object is logged.\n* Sensitive fields (password, cardNumber, ssn, etc.) never reach the log sink in plaintext.\n* Unit test asserts logged output does not contain raw sensitive values.",
-      "acceptanceCriteria": [],
-      "labels": [],
-      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-6"
+    {
+      "filePath": "batch-jberet/src/main/java/org/wildfly/extension/batch/jberet/deployment/WildFlyJobXmlResolver.java",
+      "methodName": "resolveEntity",
+      "lineNumber": 268,
+      "comment": "this is essentially what JBeret does, but it\u0027s ugly. JBeret might need an API to handle this",
+      "methodSourceCode": "// this is essentially what JBeret does, but it\u0027s ugly. JBeret might need an API to handle this\n@Override\npublic Object resolveEntity(final String publicID, final String systemID, final String baseURI, final String namespace) throws XMLStreamException {\n    try {\n        return (jobXmlFiles.containsKey(systemID) ? jobXmlFiles.get(systemID).openStream() : null);\n    } catch (IOException e) {\n        throw new XMLStreamException(e);\n    }\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:batch-jberet/src/main/java/org/wildfly/extension/batch/jberet/deployment/WildFlyJobXmlResolver.java:268:21:resolveEntity:WildFlyJobXmlResolver:resolveEntity(String, String, String, String)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
     },
-    "classificationProvenance": {
-      "provider": "DebtHunter",
-      "strategy": "model",
-      "version": "configured"
+    {
+      "filePath": "clustering/jgroups/extension/src/main/java/org/jboss/as/clustering/jgroups/JChannelFactory.java",
+      "methodName": "createChannel",
+      "lineNumber": 146,
+      "comment": "TODO Remove this once DNS_PING is configurable via an explicit DNSResolver",
+      "methodSourceCode": "// TODO Remove this once DNS_PING is configurable via an explicit DNSResolver\nprivate static JChannel createChannel(List\u003cProtocol\u003e protocols) throws Exception {\n    // DNS_PING current loads its InitialContextFactory via the TCCL\n    ClassLoader loader \u003d WildFlySecurityManager.getCurrentContextClassLoaderPrivileged();\n    try {\n        WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(JChannel.class);\n        return new JChannel(protocols);\n    } finally {\n        WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(loader);\n    }\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:clustering/jgroups/extension/src/main/java/org/jboss/as/clustering/jgroups/JChannelFactory.java:146:5:createChannel:JChannelFactory:createChannel(List)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
     },
-    "errors": [],
-    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
-    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
-  },
-  {
-    "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/cache/CacheManagerTest.java",
-    "methodName": "shouldReportCorrectSize",
-    "lineNumber": 36,
-    "comment": "TODO DEBT2TEST-4: add tests, no test covers eviction under memory pressure because\nthe cache has no eviction policy or maxSize limit yet.",
-    "methodSourceCode": "// TODO DEBT2TEST-4: add tests, no test covers eviction under memory pressure because\n// the cache has no eviction policy or maxSize limit yet.\n@Test\nvoid shouldReportCorrectSize() {\n    cacheManager.put(\"a\", 1);\n    cacheManager.put(\"b\", 2);\n    assertEquals(2, cacheManager.size());\n}",
-    "isSatd": true,
-    "debtType": "TEST",
-    "confidence": 0.4,
-    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/test/java/io/github/jonasfortes12/samples/debt/cache/CacheManagerTest.java:36:5:shouldReportCorrectSize:CacheManagerTest:shouldReportCorrectSize()",
-    "contextStatus": "MATCHED",
-    "issueReferences": [
-      {
-        "value": "DEBT2TEST-4",
-        "source": "comment"
-      }
-    ],
-    "externalTask": {
-      "provider": "jira",
-      "key": "DEBT2TEST-4",
-      "summary": "Implement bounded LRU cache",
-      "description": "{{CacheManager}} uses an unbounded {{HashMap}} with no eviction policy, risking {{OutOfMemoryError}} in production. Reported by DevOps after an incident on 2024-01-15.\n\n*Debt context (SATD):* {{CacheManager}} — TODO comment calls for an LRU cache with a max size limit.\n\n*Acceptance Criteria:*\n\n* Replace the unbounded {{HashMap}} with a bounded LRU cache (e.g., {{LinkedHashMap}} in access-order mode, or a dedicated LRU structure).\n* Cache exposes a configurable {{maxSize}}.\n* Unit tests confirm eviction occurs once {{maxSize}} is exceeded.",
-      "acceptanceCriteria": [],
-      "labels": [],
-      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-4"
+    {
+      "filePath": "connector/src/main/java/org/jboss/as/connector/services/resourceadapters/deployment/ResourceAdapterDeploymentService.java",
+      "methodName": "cleanupStartAsync",
+      "lineNumber": 147,
+      "comment": "TODO this could be replaced by the superclass method if there is no need for the TCCL change and push/pop owner\nThe stop() call doesn\u0027t do that so it\u0027s probably not needed",
+      "methodSourceCode": "// TODO this could be replaced by the superclass method if there is no need for the TCCL change and push/pop owner\n// The stop() call doesn\u0027t do that so it\u0027s probably not needed\nprivate void cleanupStartAsync(final StartContext context, final String deploymentName, final Throwable cause, final ServiceName duServiceName, final ClassLoader toUse) {\n    ExecutorService executorService \u003d getLifecycleExecutorService();\n    Runnable r \u003d new Runnable() {\n\n        @Override\n        public void run() {\n            ClassLoader old \u003d WildFlySecurityManager.getCurrentContextClassLoaderPrivileged();\n            try {\n                WritableServiceBasedNamingStore.pushOwner(duServiceName);\n                WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(toUse);\n                unregisterAll(deploymentName);\n            } finally {\n                try {\n                    context.failed(ConnectorLogger.ROOT_LOGGER.failedToStartRaDeployment(cause, deploymentName));\n                } finally {\n                    WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(old);\n                    WritableServiceBasedNamingStore.popOwner();\n                }\n            }\n        }\n    };\n    try {\n        executorService.execute(r);\n    } catch (RejectedExecutionException e) {\n        r.run();\n    } finally {\n        context.asynchronous();\n    }\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:connector/src/main/java/org/jboss/as/connector/services/resourceadapters/deployment/ResourceAdapterDeploymentService.java:147:5:cleanupStartAsync:ResourceAdapterDeploymentService:cleanupStartAsync(StartContext, String, Throwable, ServiceName, ClassLoader)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
     },
-    "classificationProvenance": {
-      "provider": "DebtHunter",
-      "strategy": "model",
-      "version": "configured"
+    {
+      "filePath": "connector/src/test/java/org/jboss/as/connector/subsystems/complextestcases/ParseUtils.java",
+      "methodName": "addExtensionProperties",
+      "lineNumber": 199,
+      "comment": "* Adds properties of Extension type to the operation\n     * TODO: not implemented jet in DMR",
+      "methodSourceCode": "/**\n * Adds properties of Extension type to the operation\n * TODO: not implemented jet in DMR\n */\npublic static void addExtensionProperties(ModelNode operation) {\n    /*\n\n        operation.get(\"reauth-plugin-properties\",\"Property\").set(\"A\");\n        operation.get(\"valid-connection-checker-properties\",\"Property\").set(\"B\");\n        operation.get(\"stale-connect,roperties\",\"Property\").set(\"C\");\n        operation.get(\"exception-sorter-properties\",\"Property\").set(\"D\");\n         */\n    /*final ModelNode sourcePropertiesAddress \u003d address.clone();\n        sourcePropertiesAddress.add(\"reauth-plugin-properties\", \"Property\");\n        sourcePropertiesAddress.protect();\n        final ModelNode sourcePropertyOperation \u003d new ModelNode();\n        sourcePropertyOperation.get(OP).set(\"add\");\n        sourcePropertyOperation.get(OP_ADDR).set(sourcePropertiesAddress);\n        sourcePropertyOperation.get(\"value\").set(\"A\");\n\n        execute(sourcePropertyOperation);*/\n}",
+      "isSatd": true,
+      "debtType": "IMPLEMENTATION",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:connector/src/test/java/org/jboss/as/connector/subsystems/complextestcases/ParseUtils.java:199:5:addExtensionProperties:ParseUtils:addExtensionProperties(ModelNode)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
     },
-    "errors": [],
-    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
-    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
-  },
-  {
-    "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/database/ConnectionPoolTest.java",
-    "methodName": "shouldNotExceedPoolSizeOnRelease",
-    "lineNumber": 32,
-    "comment": "TODO DEBT2TEST-3: add tests for concurrent access; it is untested because the pool\nlacks synchronization and a concurrency test would be flaky.",
-    "methodSourceCode": "// TODO DEBT2TEST-3: add tests for concurrent access; it is untested because the pool\n// lacks synchronization and a concurrency test would be flaky.\n@Test\nvoid shouldNotExceedPoolSizeOnRelease() throws InterruptedException {\n    ConnectionPool.DbConnection conn \u003d connectionPool.getConnection();\n    connectionPool.releaseConnection(conn);\n    connectionPool.releaseConnection(conn);\n    assertTrue(true);\n}",
-    "isSatd": true,
-    "debtType": "TEST",
-    "confidence": 0.4,
-    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/test/java/io/github/jonasfortes12/samples/debt/database/ConnectionPoolTest.java:32:5:shouldNotExceedPoolSizeOnRelease:ConnectionPoolTest:shouldNotExceedPoolSizeOnRelease()",
-    "contextStatus": "MATCHED",
-    "issueReferences": [
-      {
-        "value": "DEBT2TEST-3",
-        "source": "comment"
-      }
-    ],
-    "externalTask": {
-      "provider": "jira",
-      "key": "DEBT2TEST-3",
-      "summary": "Fix ConnectionPool race condition",
-      "description": "{{ConnectionPool.getConnection()}} and {{releaseConnection()}} access the shared {{availableConnections}} queue without synchronization, risking duplicate leases, lost connections, and pool exhaustion under load.\n\n*Debt context (SATD):* {{ConnectionPool}} — BUG comment blocks deployment to high-concurrency environments (10k+ RPS).\n\n*Acceptance Criteria:*\n\n* Replace {{LinkedList}} with {{ConcurrentLinkedQueue}}, or add proper synchronization around both methods.\n* Add a concurrency test that exercises concurrent {{getConnection}}/{{releaseConnection}} calls without lost or duplicated connections.",
-      "acceptanceCriteria": [],
-      "labels": [],
-      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-3"
+    {
+      "filePath": "connector/src/test/java/org/jboss/as/connector/subsystems/resourceadapters/ResourceAdaptersSubsystemTestCase.java",
+      "methodName": "standardSubsystemTest",
+      "lineNumber": 90,
+      "comment": "TODO: remove this special method as soon as RA will have a unique name in DMR marshalled in xml",
+      "methodSourceCode": "//TODO: remove this special method as soon as RA will have a unique name in DMR marshalled in xml\nprotected KernelServices standardSubsystemTest(final String configId, final String configIdResolvedModel, boolean compareXml) throws Exception {\n    final AdditionalInitialization additionalInit \u003d createAdditionalInitialization();\n    // Parse the subsystem xml and install into the first controller\n    final String subsystemXml \u003d configId \u003d\u003d null ? getSubsystemXml() : getSubsystemXml(configId);\n    final KernelServices servicesA \u003d super.createKernelServicesBuilder(additionalInit).setSubsystemXml(subsystemXml).build();\n    Assert.assertTrue(\"Subsystem boot failed!\", servicesA.isSuccessfulBoot());\n    //Get the model and the persisted xml from the first controller\n    final ModelNode modelA \u003d servicesA.readWholeModel();\n    validateModel(modelA);\n    // Test marshaling\n    final String marshalled \u003d servicesA.getPersistedSubsystemXml();\n    servicesA.shutdown();\n    // validate the the normalized xmls\n    String normalizedSubsystem \u003d normalizeXML(subsystemXml);\n    if (compareXml) {\n        compareXml(configId, normalizedSubsystem, normalizeXML(marshalled));\n    }\n    //Install the persisted xml from the first controller into a second controller\n    final KernelServices servicesB \u003d super.createKernelServicesBuilder(additionalInit).setSubsystemXml(marshalled).build();\n    final ModelNode modelB \u003d servicesB.readWholeModel();\n    //WE CANT DO THAT FOR RA BECAUSE THEIR NAME IS GENERATED ON THE FLY W/ archive/module concatenated to a counter.\n    //IT\u0027S AN ISSUE WM_SECURITY_MAPPING_TO BE FIXED IN SUBSYSTEM\n    //Make sure the models from the two controllers are identical\n    //compare(modelA, modelB);\n    // Test the describe operation\n    final ModelNode operation \u003d createDescribeOperation();\n    final ModelNode result \u003d servicesB.executeOperation(operation);\n    Assert.assertTrue(\"the subsystem describe operation has to generate a list of operations to recreate the subsystem\", !result.hasDefined(ModelDescriptionConstants.FAILURE_DESCRIPTION));\n    final List\u003cModelNode\u003e operations \u003d result.get(ModelDescriptionConstants.RESULT).asList();\n    servicesB.shutdown();\n    final KernelServices servicesC \u003d super.createKernelServicesBuilder(additionalInit).setBootOperations(operations).build();\n    final ModelNode modelC \u003d servicesC.readWholeModel();\n    compare(modelB, modelC);\n    assertRemoveSubsystemResources(servicesC, getIgnoredChildResourcesForRemovalTest());\n    if (configIdResolvedModel !\u003d null) {\n        final String subsystemResolvedXml \u003d getSubsystemXml(configIdResolvedModel);\n        final KernelServices servicesD \u003d super.createKernelServicesBuilder(additionalInit).setSubsystemXml(subsystemResolvedXml).build();\n        Assert.assertTrue(\"Subsystem w/ reolved xml boot failed!\", servicesD.isSuccessfulBoot());\n        final ModelNode modelD \u003d servicesD.readWholeModel();\n        validateModel(modelD);\n        resolveandCompareModel(modelA, modelD);\n    }\n    return servicesA;\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:connector/src/test/java/org/jboss/as/connector/subsystems/resourceadapters/ResourceAdaptersSubsystemTestCase.java:90:5:standardSubsystemTest:ResourceAdaptersSubsystemTestCase:standardSubsystemTest(String, String, boolean)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
     },
-    "classificationProvenance": {
-      "provider": "DebtHunter",
-      "strategy": "model",
-      "version": "configured"
+    {
+      "filePath": "dist/src/test/java/org/wildfly/dist/subsystem/xml/StandardConfigsXMLValidationUnitTestCase.java",
+      "methodName": "testStandaloneEC2HA",
+      "lineNumber": 69,
+      "comment": "TODO Leave commented out until domain-jts.xml is definitely removed from the configuration\n@Test\npublic void testDomainJTS() throws Exception {\nparseXml(\"docs/examples/configs/domain-jts.xml\");\n}\n",
+      "methodSourceCode": "//TODO Leave commented out until domain-jts.xml is definitely removed from the configuration\n//    @Test\n//    public void testDomainJTS() throws Exception {\n//        parseXml(\"docs/examples/configs/domain-jts.xml\");\n//    }\n//\n@Test\npublic void testStandaloneEC2HA() throws Exception {\n    parseXml(\"docs/examples/configs/standalone-ec2-ha.xml\");\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:dist/src/test/java/org/wildfly/dist/subsystem/xml/StandardConfigsXMLValidationUnitTestCase.java:69:5:testStandaloneEC2HA:StandardConfigsXMLValidationUnitTestCase:testStandaloneEC2HA()",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
     },
-    "errors": [],
-    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
-    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
-  },
-  {
-    "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/database/OrderRepositoryTest.java",
-    "methodName": "currentlyIssuesOneQueryPerCustomer",
-    "lineNumber": 25,
-    "comment": "TODO DEBT2TEST-7: add tests for a single batched lookup; no test covers it, this one\nonly pins the current one-query-per-customer behavior.",
-    "methodSourceCode": "// TODO DEBT2TEST-7: add tests for a single batched lookup; no test covers it, this one\n// only pins the current one-query-per-customer behavior.\n@Test\nvoid currentlyIssuesOneQueryPerCustomer() {\n    orderRepository.findOrdersForCustomers(List.of(\"c1\", \"c2\", \"c3\"));\n    assertEquals(3, orderRepository.getQueryCount());\n}",
-    "isSatd": true,
-    "debtType": "TEST",
-    "confidence": 0.4,
-    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/test/java/io/github/jonasfortes12/samples/debt/database/OrderRepositoryTest.java:25:5:currentlyIssuesOneQueryPerCustomer:OrderRepositoryTest:currentlyIssuesOneQueryPerCustomer()",
-    "contextStatus": "MATCHED",
-    "issueReferences": [
-      {
-        "value": "DEBT2TEST-7",
-        "source": "comment"
-      }
-    ],
-    "externalTask": {
-      "provider": "jira",
-      "key": "DEBT2TEST-7",
-      "summary": "Batch OrderRepository customer lookups to remove N+1 queries",
-      "description": "OrderRepository.findOrdersForCustomers() loops over customer IDs and issues one simulated query per customer instead of a single batched lookup, causing an N+1 query pattern.\n\nDebt context (SATD): OrderRepository — TODO comment notes this was written for a single-customer admin screen and was never revisited when the bulk \"customer orders export\" feature reused it, where it now issues hundreds of queries per export.\n\nAcceptance Criteria:\n\n* Replace the per-ID loop with a single batched query (e.g., WHERE customer_id IN (...)).\n* findOrdersForCustomers() issues one query regardless of input size.\n* Test covers a multi-customer call and asserts the query/call count.",
-      "acceptanceCriteria": [],
-      "labels": [],
-      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-7"
+    {
+      "filePath": "ee-dist/src/test/java/org/wildfly/dist/subsystem/xml/StandardConfigsXMLValidationUnitTestCase.java",
+      "methodName": "testStandaloneEC2HA",
+      "lineNumber": 59,
+      "comment": "TODO Leave commented out until domain-jts.xml is definitely removed from the configuration\n@Test\npublic void testDomainJTS() throws Exception {\nparseXml(\"docs/examples/configs/domain-jts.xml\");\n}\n",
+      "methodSourceCode": "//TODO Leave commented out until domain-jts.xml is definitely removed from the configuration\n//    @Test\n//    public void testDomainJTS() throws Exception {\n//        parseXml(\"docs/examples/configs/domain-jts.xml\");\n//    }\n//\n@Test\npublic void testStandaloneEC2HA() throws Exception {\n    parseXml(\"docs/examples/configs/standalone-ec2-ha.xml\");\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:ee-dist/src/test/java/org/wildfly/dist/subsystem/xml/StandardConfigsXMLValidationUnitTestCase.java:59:5:testStandaloneEC2HA:StandardConfigsXMLValidationUnitTestCase:testStandaloneEC2HA()",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
     },
-    "classificationProvenance": {
-      "provider": "DebtHunter",
-      "strategy": "model",
-      "version": "configured"
+    {
+      "filePath": "ee/src/main/java/org/jboss/as/ee/component/ComponentView.java",
+      "methodName": "invoke",
+      "lineNumber": 44,
+      "comment": "* Invoke on the component view interceptor chain.\n     * TODO: fully document the semantics of this method\n     *\n     * @param interceptorContext The context of the invocation\n     * @return The result of the invocation",
+      "methodSourceCode": "/**\n * Invoke on the component view interceptor chain.\n * TODO: fully document the semantics of this method\n *\n * @param interceptorContext The context of the invocation\n * @return The result of the invocation\n */\nObject invoke(final InterceptorContext interceptorContext) throws Exception;",
+      "isSatd": true,
+      "debtType": "DOCUMENTATION",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:ee/src/main/java/org/jboss/as/ee/component/ComponentView.java:44:5:invoke:ComponentView:invoke(InterceptorContext)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
     },
-    "errors": [],
-    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
-    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
-  },
-  {
-    "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/logging/AuditLoggerTest.java",
-    "methodName": "currentlyLogsSensitiveFieldsInPlaintext",
-    "lineNumber": 24,
-    "comment": "TODO DEBT2TEST-6: document why this test asserts the plaintext password; explain that\nit pins the current unredacted logging and must be inverted once redaction exists.",
-    "methodSourceCode": "// TODO DEBT2TEST-6: document why this test asserts the plaintext password; explain that\n// it pins the current unredacted logging and must be inverted once redaction exists.\n@Test\nvoid currentlyLogsSensitiveFieldsInPlaintext() {\n    auditLogger.logRequest(new AuditLogger.Request(\"alice\", \"s3cr3t\", \"4111111111111111\"));\n    String entry \u003d auditLogger.getLoggedEntries().get(0);\n    assertTrue(entry.contains(\"s3cr3t\"));\n    assertTrue(entry.contains(\"4111111111111111\"));\n}",
-    "isSatd": true,
-    "debtType": "DOCUMENTATION",
-    "confidence": 0.4,
-    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/test/java/io/github/jonasfortes12/samples/debt/logging/AuditLoggerTest.java:24:5:currentlyLogsSensitiveFieldsInPlaintext:AuditLoggerTest:currentlyLogsSensitiveFieldsInPlaintext()",
-    "contextStatus": "MATCHED",
-    "issueReferences": [
-      {
-        "value": "DEBT2TEST-6",
-        "source": "comment"
-      }
-    ],
-    "externalTask": {
-      "provider": "jira",
-      "key": "DEBT2TEST-6",
-      "summary": "Redact sensitive data from audit logs",
-      "description": "AuditLogger.logRequest() writes full request objects to the log via toString(), including raw passwords and credit card numbers, in plaintext.\n\nDebt context (SATD): AuditLogger — FIXME comment flags this as a compliance risk (PCI-DSS/GDPR) introduced during the 2023 audit-trail rollout, since logs are shipped to a third-party aggregator.\n\nAcceptance Criteria:\n\n* Introduce a redaction step (field allowlist or masking) before any object is logged.\n* Sensitive fields (password, cardNumber, ssn, etc.) never reach the log sink in plaintext.\n* Unit test asserts logged output does not contain raw sensitive values.",
-      "acceptanceCriteria": [],
-      "labels": [],
-      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-6"
+    {
+      "filePath": "ee/src/main/java/org/jboss/as/ee/component/deployers/ResourceReferenceProcessor.java",
+      "methodName": "getMessageDestinationRefs",
+      "lineNumber": 298,
+      "comment": "* TODO: should this be part of the messaging subsystem",
+      "methodSourceCode": "/**\n * TODO: should this be part of the messaging subsystem\n */\nprivate List\u003cBindingConfiguration\u003e getMessageDestinationRefs(final DeploymentDescriptorEnvironment environment, final ClassLoader classLoader, final DeploymentReflectionIndex deploymentReflectionIndex, final ResourceInjectionTarget resourceInjectionTarget, final DeploymentUnit deploymentUnit) throws DeploymentUnitProcessingException {\n    final List\u003cBindingConfiguration\u003e bindings \u003d new ArrayList\u003cBindingConfiguration\u003e();\n    final MessageDestinationReferencesMetaData messageDestinationReferences \u003d environment.getEnvironment().getMessageDestinationReferences();\n    if (messageDestinationReferences \u003d\u003d null) {\n        return bindings;\n    }\n    for (final MessageDestinationReferenceMetaData messageRef : messageDestinationReferences) {\n        if (messageRef.isDependencyIgnored()) {\n            continue;\n        }\n        final String name;\n        if (messageRef.getName().startsWith(\"java:\")) {\n            name \u003d messageRef.getName();\n        } else {\n            name \u003d environment.getDefaultContext() + messageRef.getName();\n        }\n        Class\u003c?\u003e classType \u003d null;\n        if (messageRef.getType() !\u003d null) {\n            try {\n                classType \u003d classLoader.loadClass(messageRef.getType());\n            } catch (ClassNotFoundException e) {\n                throw EeLogger.ROOT_LOGGER.cannotLoad(e, messageRef.getType());\n            }\n        }\n        // our injection (source) comes from the local (ENC) lookup, no matter what.\n        final LookupInjectionSource injectionSource \u003d new LookupInjectionSource(name);\n        classType \u003d processInjectionTargets(resourceInjectionTarget, injectionSource, classLoader, deploymentReflectionIndex, messageRef, classType);\n        final BindingConfiguration bindingConfiguration;\n        if (!isEmpty(messageRef.getLookupName())) {\n            bindingConfiguration \u003d new BindingConfiguration(name, new LookupInjectionSource(messageRef.getLookupName()));\n            bindings.add(bindingConfiguration);\n        } else if (!isEmpty(messageRef.getMappedName())) {\n            bindingConfiguration \u003d new BindingConfiguration(name, new LookupInjectionSource(messageRef.getMappedName()));\n            bindings.add(bindingConfiguration);\n        } else if (!isEmpty(messageRef.getLink())) {\n            final MessageDestinationInjectionSource messageDestinationInjectionSource \u003d new MessageDestinationInjectionSource(messageRef.getLink(), name);\n            bindingConfiguration \u003d new BindingConfiguration(name, messageDestinationInjectionSource);\n            deploymentUnit.addToAttachmentList(Attachments.MESSAGE_DESTINATIONS, messageDestinationInjectionSource);\n            bindings.add(bindingConfiguration);\n        } else {\n            ROOT_LOGGER.cannotResolve(\"message-destination-ref\", name);\n        }\n    }\n    return bindings;\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:ee/src/main/java/org/jboss/as/ee/component/deployers/ResourceReferenceProcessor.java:298:5:getMessageDestinationRefs:ResourceReferenceProcessor:getMessageDestinationRefs(DeploymentDescriptorEnvironment, ClassLoader, DeploymentReflectionIndex, ResourceInjectionTarget, DeploymentUnit)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
     },
-    "classificationProvenance": {
-      "provider": "DebtHunter",
-      "strategy": "model",
-      "version": "configured"
+    {
+      "filePath": "ejb3/src/main/java/org/jboss/as/ejb3/component/MethodIntfHelper.java",
+      "methodName": "of",
+      "lineNumber": 16,
+      "comment": "centralize this hack",
+      "methodSourceCode": "// centralize this hack\npublic static MethodInterfaceType of(final InterceptorContext invocation) {\n    //for timer invocations there is no view, so the methodInf is attached directly\n    //to the context. Otherwise we retrieve it from the invoked view\n    MethodInterfaceType methodIntf \u003d invocation.getPrivateData(MethodInterfaceType.class);\n    if (methodIntf \u003d\u003d null) {\n        final ComponentView componentView \u003d invocation.getPrivateData(ComponentView.class);\n        if (componentView !\u003d null) {\n            methodIntf \u003d componentView.getPrivateData(MethodInterfaceType.class);\n        } else {\n            methodIntf \u003d MethodInterfaceType.Bean;\n        }\n    }\n    return methodIntf;\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:ejb3/src/main/java/org/jboss/as/ejb3/component/MethodIntfHelper.java:16:5:of:MethodIntfHelper:of(InterceptorContext)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
     },
-    "errors": [],
-    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
-    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
-  },
-  {
-    "filePath": "src/test/java/io/github/jonasfortes12/samples/debt/payment/PaymentProcessorTest.java",
-    "methodName": "shouldFailOnNegativeAmountAfterRetries",
-    "lineNumber": 24,
-    "comment": "TODO DEBT2TEST-2: add tests for the retry path; it is untested directly because the\nhardcoded gateway timeout cannot be injected.",
-    "methodSourceCode": "// TODO DEBT2TEST-2: add tests for the retry path; it is untested directly because the\n// hardcoded gateway timeout cannot be injected.\n@Test\nvoid shouldFailOnNegativeAmountAfterRetries() {\n    PaymentProcessor.Order order \u003d new PaymentProcessor.Order(\"order-2\", -50.0);\n    PaymentProcessor.PaymentResult result \u003d paymentProcessor.process(order);\n    assertFalse(result.success());\n}",
-    "isSatd": true,
-    "debtType": "TEST",
-    "confidence": 0.4,
-    "candidateId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b:src/test/java/io/github/jonasfortes12/samples/debt/payment/PaymentProcessorTest.java:24:5:shouldFailOnNegativeAmountAfterRetries:PaymentProcessorTest:shouldFailOnNegativeAmountAfterRetries()",
-    "contextStatus": "MATCHED",
-    "issueReferences": [
-      {
-        "value": "DEBT2TEST-2",
-        "source": "comment"
-      }
-    ],
-    "externalTask": {
-      "provider": "jira",
-      "key": "DEBT2TEST-2",
-      "summary": "Refactor payment timeout configuration",
-      "description": "The payment gateway timeout is hardcoded ({{GATEWAY_TIMEOUT_MS \u003d 5000}}) directly in {{PaymentProcessor}}, mixing configuration with business logic and making the retry path untestable without manual intervention.\n\n*Debt context (SATD):* {{PaymentProcessor}} — FIXME comment calls for extracting the timeout into a separate configuration class.\n\n*Acceptance Criteria:*\n\n* Extract {{GATEWAY_TIMEOUT_MS}} and {{MAX_RETRY_ATTEMPTS}} into an injectable configuration object.\n* {{PaymentProcessor}} receives configuration via constructor/DI instead of static constants.\n* Retry/timeout behavior is covered by unit tests using injected configuration values.",
-      "acceptanceCriteria": [],
-      "labels": [],
-      "url": "https://debt2test.atlassian.net/browse/DEBT2TEST-2"
+    {
+      "filePath": "ejb3/src/main/java/org/jboss/as/ejb3/timerservice/TimerImpl.java",
+      "methodName": "suspend",
+      "lineNumber": 458,
+      "comment": "TODO: Revisit this method, we probably don\u0027t need this any more.\nIn terms of implementation, this is just equivalent to cancelTimeout() method",
+      "methodSourceCode": "/**\n * Suspends any currently scheduled task for this timer\n * \u003cp\u003e\n * Note that, suspend does \u003cb\u003enot\u003c/b\u003e cancel the {@link Timer}. Instead,\n * it just cancels the \u003cb\u003enext scheduled timeout\u003c/b\u003e. So once the {@link Timer}\n * is restored (whenever that happens), the {@link Timer} will continue to\n * timeout at appropriate times.\n * \u003c/p\u003e\n */\n// TODO: Revisit this method, we probably don\u0027t need this any more.\n// In terms of implementation, this is just equivalent to cancelTimeout() method\n@Override\npublic void suspend() {\n    // cancel any scheduled timer task (Future) for this timer\n    // delegate to the timerservice, so that it can cancel any scheduled Future\n    // for this timer\n    this.timerService.cancelTimeout(this);\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:ejb3/src/main/java/org/jboss/as/ejb3/timerservice/TimerImpl.java:458:5:suspend:TimerImpl:suspend()",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
     },
-    "classificationProvenance": {
-      "provider": "DebtHunter",
-      "strategy": "model",
-      "version": "configured"
+    {
+      "filePath": "iiop-openjdk/src/main/java/org/wildfly/iiop/openjdk/csiv2/CSIv2Util.java",
+      "methodName": "createGSSExportedName",
+      "lineNumber": 524,
+      "comment": "* \u003cp/\u003e\n     * Generate an exported name as specified in [RFC 2743], section 3.2 copied below:\n     * \u003cp/\u003e\n     * 3.2: Mechanism-Independent Exported Name Object Format\n     * \u003cp/\u003e\n     * This section specifies a mechanism-independent level of encapsulating representation for names exported via the\n     * GSS_Export_name() call, including an object identifier representing the exporting mechanism. The format of names\n     * encapsulated via this representation shall be defined within individual mechanism drafts.  The Object Identifier\n     * value to indicate names of this type is defined in Section 4.7 of this document.\n     * \u003cp/\u003e\n     * No name type OID is included in this mechanism-independent level of format definition, since (depending on\n     * individual mechanism specifications) the enclosed name may be implicitly typed or may be explicitly typed using\n     * a means other than OID encoding.\n     * \u003cp/\u003e\n     * The bytes within MECH_OID_LEN and NAME_LEN elements are represented most significant byte first (equivalently,\n     * in IP network byte order).\n     * \u003cp/\u003e\n     * Length          Name            Description\n     * \u003cp/\u003e\n     * 2               TOK_ID          Token Identifier\n     * For exported name objects, this must be hex 04 01.\n     * 2               MECH_OID_LEN    Length of the Mechanism OID\n     * MECH_OID_LEN    MECH_OID        Mechanism OID, in DER\n     * 4               NAME_LEN        Length of name\n     * NAME_LEN        NAME            Exported name; format defined in applicable mechanism draft.\n     * \u003cp/\u003e\n     * A concrete example of the contents of an exported name object, derived from the Kerberos Version 5 mechanism, is\n     * as follows:\n     * \u003cp/\u003e\n     * 04 01 00 0B 06 09 2A 86 48 86 F7 12 01 02 02 hx xx xx xl pp qq ... zz\n     * \u003cp/\u003e\n     * ...\n     *\n     * @param oid  the DER encoded OID.\n     * @param name the name to be converted to {@code GSSExportedName}.\n     * @return a {@code byte[]} representing the exported name.",
+      "methodSourceCode": "/**\n * \u003cp/\u003e\n * Generate an exported name as specified in [RFC 2743], section 3.2 copied below:\n * \u003cp/\u003e\n * 3.2: Mechanism-Independent Exported Name Object Format\n * \u003cp/\u003e\n * This section specifies a mechanism-independent level of encapsulating representation for names exported via the\n * GSS_Export_name() call, including an object identifier representing the exporting mechanism. The format of names\n * encapsulated via this representation shall be defined within individual mechanism drafts.  The Object Identifier\n * value to indicate names of this type is defined in Section 4.7 of this document.\n * \u003cp/\u003e\n * No name type OID is included in this mechanism-independent level of format definition, since (depending on\n * individual mechanism specifications) the enclosed name may be implicitly typed or may be explicitly typed using\n * a means other than OID encoding.\n * \u003cp/\u003e\n * The bytes within MECH_OID_LEN and NAME_LEN elements are represented most significant byte first (equivalently,\n * in IP network byte order).\n * \u003cp/\u003e\n * Length          Name            Description\n * \u003cp/\u003e\n * 2               TOK_ID          Token Identifier\n * For exported name objects, this must be hex 04 01.\n * 2               MECH_OID_LEN    Length of the Mechanism OID\n * MECH_OID_LEN    MECH_OID        Mechanism OID, in DER\n * 4               NAME_LEN        Length of name\n * NAME_LEN        NAME            Exported name; format defined in applicable mechanism draft.\n * \u003cp/\u003e\n * A concrete example of the contents of an exported name object, derived from the Kerberos Version 5 mechanism, is\n * as follows:\n * \u003cp/\u003e\n * 04 01 00 0B 06 09 2A 86 48 86 F7 12 01 02 02 hx xx xx xl pp qq ... zz\n * \u003cp/\u003e\n * ...\n *\n * @param oid  the DER encoded OID.\n * @param name the name to be converted to {@code GSSExportedName}.\n * @return a {@code byte[]} representing the exported name.\n */\npublic static byte[] createGSSExportedName(byte[] oid, byte[] name) {\n    int olen \u003d oid.length;\n    int nlen \u003d name.length;\n    // size according to spec.\n    int size \u003d 2 + 2 + olen + 4 + nlen;\n    // allocate space for the exported name.\n    byte[] buf \u003d new byte[size];\n    // index.\n    int i \u003d 0;\n    // standard header.\n    buf[i++] \u003d 0x04;\n    buf[i++] \u003d 0x01;\n    // encode oid length.\n    buf[i++] \u003d (byte) (olen \u0026 0xFF00);\n    buf[i++] \u003d (byte) (olen \u0026 0x00FF);\n    // copy the oid in the exported name buffer.\n    System.arraycopy(oid, 0, buf, i, olen);\n    i +\u003d olen;\n    // encode the name length in the exported buffer.\n    buf[i++] \u003d (byte) (nlen \u0026 0xFF000000);\n    buf[i++] \u003d (byte) (nlen \u0026 0x00FF0000);\n    buf[i++] \u003d (byte) (nlen \u0026 0x0000FF00);\n    buf[i++] \u003d (byte) (nlen \u0026 0x000000FF);\n    // finally, copy the name bytes.\n    System.arraycopy(name, 0, buf, i, nlen);\n    return buf;\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:iiop-openjdk/src/main/java/org/wildfly/iiop/openjdk/csiv2/CSIv2Util.java:524:5:createGSSExportedName:CSIv2Util:createGSSExportedName(byte[], byte[])",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
     },
-    "errors": [],
-    "runId": "797c411338d12904064f5879a76ed3f1f02f8701cc24a7ca00ced68e4b8f8c2b",
-    "repositoryUrl": "https://github.com/JonasFortes12/mock-debt-project",
-    "revision": "6ce2fa9f7ce751a0f9a31761febc7a3c2515e9db"
-  }
-]
+    {
+      "filePath": "iiop-openjdk/src/main/java/org/wildfly/iiop/openjdk/rmi/ir/InterfaceRepository.java",
+      "methodName": "getTypeCode",
+      "lineNumber": 223,
+      "comment": "* Returns the TypeCode IDL TypeCodes for parameter, result, attribute\n     * and value member types.\n     * This may provoke a mapping of the class argument.\n     * \u003cp/\u003e\n     * Exception classes map to both values and exceptions. For these, this\n     * method returns the typecode for the value, and you can use the\n     * \u003ccode\u003egetExceptionTypeCode\u003c/code\u003e TODO method to get the typecode for the\n     * mapping to exception.\n     *\n     * @param cls The Java class denoting the java type.",
+      "methodSourceCode": "/**\n * Returns the TypeCode IDL TypeCodes for parameter, result, attribute\n * and value member types.\n * This may provoke a mapping of the class argument.\n * \u003cp/\u003e\n * Exception classes map to both values and exceptions. For these, this\n * method returns the typecode for the value, and you can use the\n * \u003ccode\u003egetExceptionTypeCode\u003c/code\u003e TODO method to get the typecode for the\n * mapping to exception.\n *\n * @param cls The Java class denoting the java type.\n */\nprivate TypeCode getTypeCode(Class cls) throws IRConstructionException, RMIIIOPViolationException {\n    if (cls \u003d\u003d null)\n        throw IIOPLogger.ROOT_LOGGER.invalidNullClass();\n    TypeCode ret \u003d (TypeCode) typeCodeMap.get(cls);\n    if (ret \u003d\u003d null) {\n        if (cls \u003d\u003d String.class)\n            ret \u003d getJavaLangString().type();\n        else if (cls \u003d\u003d Object.class)\n            ret \u003d getJavaLang_Object().type();\n        else if (cls \u003d\u003d Class.class)\n            ret \u003d getJavaxRmiCORBAClassDesc().type();\n        else if (cls \u003d\u003d java.io.Serializable.class)\n            ret \u003d getJavaIoSerializable().type();\n        else if (cls \u003d\u003d java.io.Externalizable.class)\n            ret \u003d getJavaIoExternalizable().type();\n        else {\n            // Try adding a mapping of the the class to the IR\n            addClass(cls);\n            // Lookup again, it should be there now.\n            ret \u003d (TypeCode) typeCodeMap.get(cls);\n            if (ret \u003d\u003d null)\n                throw IIOPLogger.ROOT_LOGGER.unknownTypeCodeForClass(cls.getName());\n            else\n                return ret;\n        }\n        typeCodeMap.put(cls, ret);\n    }\n    return ret;\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:iiop-openjdk/src/main/java/org/wildfly/iiop/openjdk/rmi/ir/InterfaceRepository.java:223:5:getTypeCode:InterfaceRepository:getTypeCode(Class)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "jpa/subsystem/src/main/java/org/jboss/as/jpa/processor/PersistenceUnitServiceHandler.java",
+      "methodName": "getOrCreateResource",
+      "lineNumber": 1152,
+      "comment": "* TODO this is a temporary hack into internals until DeploymentUnit exposes a proper Resource-based API",
+      "methodSourceCode": "/**\n * TODO this is a temporary hack into internals until DeploymentUnit exposes a proper Resource-based API\n */\nprivate static Resource getOrCreateResource(final Resource parent, final PathElement element) {\n    synchronized (parent) {\n        if (parent.hasChild(element)) {\n            return parent.requireChild(element);\n        } else {\n            final Resource resource \u003d Resource.Factory.create();\n            parent.registerChild(element, resource);\n            return resource;\n        }\n    }\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:jpa/subsystem/src/main/java/org/jboss/as/jpa/processor/PersistenceUnitServiceHandler.java:1152:5:getOrCreateResource:PersistenceUnitServiceHandler:getOrCreateResource(Resource, PathElement)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "legacy/ee-feature-pack/dist/src/test/java/org/wildfly/dist/subsystem/xml/StandardConfigsXMLValidationUnitTestCase.java",
+      "methodName": "testStandaloneEC2HA",
+      "lineNumber": 69,
+      "comment": "TODO Leave commented out until domain-jts.xml is definitely removed from the configuration\n@Test\npublic void testDomainJTS() throws Exception {\nparseXml(\"docs/examples/configs/domain-jts.xml\");\n}\n",
+      "methodSourceCode": "//TODO Leave commented out until domain-jts.xml is definitely removed from the configuration\n//    @Test\n//    public void testDomainJTS() throws Exception {\n//        parseXml(\"docs/examples/configs/domain-jts.xml\");\n//    }\n//\n@Test\npublic void testStandaloneEC2HA() throws Exception {\n    parseXml(\"docs/examples/configs/standalone-ec2-ha.xml\");\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:legacy/ee-feature-pack/dist/src/test/java/org/wildfly/dist/subsystem/xml/StandardConfigsXMLValidationUnitTestCase.java:69:5:testStandaloneEC2HA:StandardConfigsXMLValidationUnitTestCase:testStandaloneEC2HA()",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "legacy/ee-feature-pack/ee-dist/src/test/java/org/wildfly/dist/subsystem/xml/StandardConfigsXMLValidationUnitTestCase.java",
+      "methodName": "testStandaloneEC2HA",
+      "lineNumber": 59,
+      "comment": "TODO Leave commented out until domain-jts.xml is definitely removed from the configuration\n@Test\npublic void testDomainJTS() throws Exception {\nparseXml(\"docs/examples/configs/domain-jts.xml\");\n}\n",
+      "methodSourceCode": "//TODO Leave commented out until domain-jts.xml is definitely removed from the configuration\n//    @Test\n//    public void testDomainJTS() throws Exception {\n//        parseXml(\"docs/examples/configs/domain-jts.xml\");\n//    }\n//\n@Test\npublic void testStandaloneEC2HA() throws Exception {\n    parseXml(\"docs/examples/configs/standalone-ec2-ha.xml\");\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:legacy/ee-feature-pack/ee-dist/src/test/java/org/wildfly/dist/subsystem/xml/StandardConfigsXMLValidationUnitTestCase.java:59:5:testStandaloneEC2HA:StandardConfigsXMLValidationUnitTestCase:testStandaloneEC2HA()",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "legacy/security/subsystem/src/main/java/org/jboss/as/security/elytron/ElytronIntegrationResourceDefinitions.java",
+      "methodName": "getElytronTrustStoreResourceDefinition",
+      "lineNumber": 113,
+      "comment": "* Defines a resource that represents an Elytron-compatible trust store that will be exported by a JSSE-enabled domain\n     * in the legacy security subsystem.\n     *\n     * To export the trust store the resource uses a {@code BasicAddHandler} implementation that registers the elytron key-store\n     * capability and implements a {@code org.jboss.as.security.elytron.BasicService.ValueSupplier} that uses the injected\n     * {@code SecurityDomainContext} to obtain a {@code JSSESecurityDomain}. If such domain is found, its configured trust\n     * store is obtained and returned.\n     *\n     * NOTE 1: In the Elytron subsystem, both key stores and trust stores are registered using the same capability. This\n     * means that the name of the trust store must be unique across all configured trust stores and key stores. If a trust\n     * store resource is registered with the same name of a key store resource, an error will occur.\n     *\n     * The {@code ValueSupplier} implementation throws an exception if the referenced legacy domain is not a JSSE-enabled\n     * domain or if the domain doesn\u0027t contain a trust store configuration.\n     *\n     * NOTE 2: The {@code PicketBox} implementation of a {@code JSSESecurityDomain} returns a reference to the key store if\n     * a trust store was not configured. So extra care must be taken when that implementation is used (default) as the code\n     * will silently export the key store as a trust store instead of throwing an exception to alert about a missing trust\n     * store configuration in the legacy JSSE-enabled domain.",
+      "methodSourceCode": "/**\n * Defines a resource that represents an Elytron-compatible trust store that will be exported by a JSSE-enabled domain\n * in the legacy security subsystem.\n *\n * To export the trust store the resource uses a {@code BasicAddHandler} implementation that registers the elytron key-store\n * capability and implements a {@code org.jboss.as.security.elytron.BasicService.ValueSupplier} that uses the injected\n * {@code SecurityDomainContext} to obtain a {@code JSSESecurityDomain}. If such domain is found, its configured trust\n * store is obtained and returned.\n *\n * NOTE 1: In the Elytron subsystem, both key stores and trust stores are registered using the same capability. This\n * means that the name of the trust store must be unique across all configured trust stores and key stores. If a trust\n * store resource is registered with the same name of a key store resource, an error will occur.\n *\n * The {@code ValueSupplier} implementation throws an exception if the referenced legacy domain is not a JSSE-enabled\n * domain or if the domain doesn\u0027t contain a trust store configuration.\n *\n * NOTE 2: The {@code PicketBox} implementation of a {@code JSSESecurityDomain} returns a reference to the key store if\n * a trust store was not configured. So extra care must be taken when that implementation is used (default) as the code\n * will silently export the key store as a trust store instead of throwing an exception to alert about a missing trust\n * store configuration in the legacy JSSE-enabled domain.\n */\npublic static ResourceDefinition getElytronTrustStoreResourceDefinition() {\n    final AttributeDefinition[] attributes \u003d new AttributeDefinition[] { LEGACY_JSSE_CONFIG };\n    final AbstractAddStepHandler addHandler \u003d new ModelOnlyAddStepHandler(attributes);\n    return new BasicResourceDefinition(Constants.ELYTRON_TRUST_STORE, addHandler, attributes, KEY_STORE_RUNTIME_CAPABILITY);\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:legacy/security/subsystem/src/main/java/org/jboss/as/security/elytron/ElytronIntegrationResourceDefinitions.java:113:5:getElytronTrustStoreResourceDefinition:ElytronIntegrationResourceDefinitions:getElytronTrustStoreResourceDefinition()",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "legacy/security/subsystem/src/main/java/org/jboss/as/security/elytron/ElytronIntegrationResourceDefinitions.java",
+      "methodName": "getElytronTrustManagersResourceDefinition",
+      "lineNumber": 156,
+      "comment": "* Defines a resource that represents Elytron-compatible trust managers that can be exported by a JSSE-enabled domain\n     * in the legacy security subsystem.\n     *\n     * To export the trust managers the resource uses a {@code BasicAddHandler} implementation that registers the elytron\n     * trust-managers capability and implements a {@code org.jboss.as.security.elytron.BasicService.ValueSupplier} that uses\n     * the injected {@code SecurityDomainContext} to obtain a {@code JSSESecurityDomain}. If such domain is found, its\n     * configured trust manager array is obtained and returned.\n     *\n     * The {@code ValueSupplier} implementation throws an exception if the referenced legacy domain is not a JSSE-enabled\n     * domain or if the domain doesn\u0027t contain a trust store configuration that can be used to build the trust managers.\n     *\n     * NOTE: The {@code PicketBox} implementation of a {@code JSSESecurityDomain} returns a reference to the key store if\n     * a trust store was not configured. This means that the trust managers that it builds will use the configured key store\n     * instead of throwing an exception to alert about a missing trust store configuration. So extra care must be taken\n     * to ensure that the exported trust managers are being built using the correct trust stores.",
+      "methodSourceCode": "/**\n * Defines a resource that represents Elytron-compatible trust managers that can be exported by a JSSE-enabled domain\n * in the legacy security subsystem.\n *\n * To export the trust managers the resource uses a {@code BasicAddHandler} implementation that registers the elytron\n * trust-managers capability and implements a {@code org.jboss.as.security.elytron.BasicService.ValueSupplier} that uses\n * the injected {@code SecurityDomainContext} to obtain a {@code JSSESecurityDomain}. If such domain is found, its\n * configured trust manager array is obtained and returned.\n *\n * The {@code ValueSupplier} implementation throws an exception if the referenced legacy domain is not a JSSE-enabled\n * domain or if the domain doesn\u0027t contain a trust store configuration that can be used to build the trust managers.\n *\n * NOTE: The {@code PicketBox} implementation of a {@code JSSESecurityDomain} returns a reference to the key store if\n * a trust store was not configured. This means that the trust managers that it builds will use the configured key store\n * instead of throwing an exception to alert about a missing trust store configuration. So extra care must be taken\n * to ensure that the exported trust managers are being built using the correct trust stores.\n */\npublic static ResourceDefinition getElytronTrustManagersResourceDefinition() {\n    final AttributeDefinition[] attributes \u003d new AttributeDefinition[] { LEGACY_JSSE_CONFIG };\n    final AbstractAddStepHandler addHandler \u003d new ModelOnlyAddStepHandler(attributes);\n    return new BasicResourceDefinition(Constants.ELYTRON_TRUST_MANAGER, addHandler, attributes, TRUST_MANAGER_RUNTIME_CAPABILITY);\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:legacy/security/subsystem/src/main/java/org/jboss/as/security/elytron/ElytronIntegrationResourceDefinitions.java:156:5:getElytronTrustManagersResourceDefinition:ElytronIntegrationResourceDefinitions:getElytronTrustManagersResourceDefinition()",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "mail/src/test/java/org/jboss/as/mail/extension/MailSubsystemTestCase.java",
+      "methodName": "parameters",
+      "lineNumber": 66,
+      "comment": "TODO Create formal enumeration of schema versions",
+      "methodSourceCode": "// TODO Create formal enumeration of schema versions\n@Parameters\npublic static Collection\u003cObject[]\u003e parameters() {\n    return List.of(new Object[] { 1, 0 }, new Object[] { 1, 1 }, new Object[] { 1, 2 }, new Object[] { 2, 0 }, new Object[] { 3, 0 }, new Object[] { 4, 0 });\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:mail/src/test/java/org/jboss/as/mail/extension/MailSubsystemTestCase.java:66:5:parameters:MailSubsystemTestCase:parameters()",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "messaging-activemq/subsystem/src/main/java/org/wildfly/extension/messaging/activemq/ActiveMQResourceAdapter.java",
+      "methodName": "createRecoveryActiveMQConnectionFactory",
+      "lineNumber": 74,
+      "comment": "* Workaround for WFLY-18756 until https://issues.apache.org/jira/browse/ARTEMIS-4508 is merged and released.",
+      "methodSourceCode": "/**\n * Workaround for WFLY-18756 until https://issues.apache.org/jira/browse/ARTEMIS-4508 is merged and released.\n */\n@Override\npublic ActiveMQConnectionFactory createRecoveryActiveMQConnectionFactory(final ConnectionFactoryProperties overrideProperties) {\n    ActiveMQConnectionFactory cf \u003d super.createRecoveryActiveMQConnectionFactory(overrideProperties);\n    cf.setUseTopologyForLoadBalancing(this.isUseTopologyForLoadBalancing());\n    return cf;\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:messaging-activemq/subsystem/src/main/java/org/wildfly/extension/messaging/activemq/ActiveMQResourceAdapter.java:74:5:createRecoveryActiveMQConnectionFactory:ActiveMQResourceAdapter:createRecoveryActiveMQConnectionFactory(ConnectionFactoryProperties)",
+      "contextStatus": "MATCHED",
+      "issueReferences": [
+        {
+          "value": "WFLY-18756",
+          "source": "comment"
+        },
+        {
+          "value": "ARTEMIS-4508",
+          "source": "comment"
+        }
+      ],
+      "externalTask": {
+        "provider": "jira",
+        "key": "WFLY-18756",
+        "summary": "WildFly throws UnknownHostExceptions and XARecovery fails when Connected to an AMQ Cluster in OpenShift",
+        "description": "When the JBoss EAP is running outside OpenShift with its messaging-activemq subsystem iconfigured as a resource adapter connecting to an AMQ cluster within OpenShift, we see UnknownHostExceptions and XARecovery failures due to topology updates, even if useTopologyForLoadBalancing is set to false and even if ha is also set false.\r\n\r\n",
+        "acceptanceCriteria": [],
+        "labels": [],
+        "url": "https://redhat.atlassian.net/browse/WFLY-18756"
+      },
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "messaging-activemq/subsystem/src/main/java/org/wildfly/extension/messaging/activemq/BroadcastGroupDefinition.java",
+      "methodName": "getAvailableConnectors",
+      "lineNumber": 141,
+      "comment": "FIXME use capabilities \u0026 requirements",
+      "methodSourceCode": "// FIXME use capabilities \u0026 requirements\nprivate static Set\u003cString\u003e getAvailableConnectors(final OperationContext context, final ModelNode operation) throws OperationFailedException {\n    PathAddress address \u003d PathAddress.pathAddress(operation.get(ModelDescriptionConstants.OP_ADDR));\n    PathAddress active \u003d MessagingServices.getActiveMQServerPathAddress(address);\n    Set\u003cString\u003e availableConnectors \u003d new HashSet\u003c\u003e();\n    Resource subsystemResource \u003d context.readResourceFromRoot(active.getParent(), false);\n    availableConnectors.addAll(subsystemResource.getChildrenNames(CommonAttributes.REMOTE_CONNECTOR));\n    Resource activeMQServerResource \u003d context.readResourceFromRoot(active, false);\n    availableConnectors.addAll(activeMQServerResource.getChildrenNames(CommonAttributes.HTTP_CONNECTOR));\n    availableConnectors.addAll(activeMQServerResource.getChildrenNames(CommonAttributes.IN_VM_CONNECTOR));\n    availableConnectors.addAll(activeMQServerResource.getChildrenNames(CommonAttributes.REMOTE_CONNECTOR));\n    availableConnectors.addAll(activeMQServerResource.getChildrenNames(CommonAttributes.CONNECTOR));\n    return availableConnectors;\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:messaging-activemq/subsystem/src/main/java/org/wildfly/extension/messaging/activemq/BroadcastGroupDefinition.java:141:5:getAvailableConnectors:BroadcastGroupDefinition:getAvailableConnectors(OperationContext, ModelNode)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "messaging-activemq/subsystem/src/main/java/org/wildfly/extension/messaging/activemq/BroadcastGroupWriteAttributeHandler.java",
+      "methodName": "getAvailableConnectors",
+      "lineNumber": 69,
+      "comment": "FIXME use capabilities \u0026 requirements",
+      "methodSourceCode": "// FIXME use capabilities \u0026 requirements\nprivate static Set\u003cString\u003e getAvailableConnectors(final OperationContext context, final ModelNode operation) throws OperationFailedException {\n    PathAddress address \u003d PathAddress.pathAddress(operation.get(ModelDescriptionConstants.OP_ADDR));\n    PathAddress active \u003d MessagingServices.getActiveMQServerPathAddress(address);\n    Set\u003cString\u003e availableConnectors \u003d new HashSet\u003c\u003e();\n    Resource subsystemResource \u003d context.readResourceFromRoot(active.getParent(), false);\n    availableConnectors.addAll(subsystemResource.getChildrenNames(CommonAttributes.REMOTE_CONNECTOR));\n    Resource activeMQServerResource \u003d context.readResourceFromRoot(active, false);\n    availableConnectors.addAll(activeMQServerResource.getChildrenNames(CommonAttributes.HTTP_CONNECTOR));\n    availableConnectors.addAll(activeMQServerResource.getChildrenNames(CommonAttributes.IN_VM_CONNECTOR));\n    availableConnectors.addAll(activeMQServerResource.getChildrenNames(CommonAttributes.REMOTE_CONNECTOR));\n    availableConnectors.addAll(activeMQServerResource.getChildrenNames(CommonAttributes.CONNECTOR));\n    return availableConnectors;\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:messaging-activemq/subsystem/src/main/java/org/wildfly/extension/messaging/activemq/BroadcastGroupWriteAttributeHandler.java:69:5:getAvailableConnectors:BroadcastGroupWriteAttributeHandler:getAvailableConnectors(OperationContext, ModelNode)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "messaging-activemq/subsystem/src/main/java/org/wildfly/extension/messaging/activemq/PathDefinition.java",
+      "methodName": "getMinOccurs",
+      "lineNumber": 132,
+      "comment": "TODO add @Override once the WFCORE version with this method is integrated",
+      "methodSourceCode": "// TODO add @Override once the WFCORE version with this method is integrated\npublic int getMinOccurs() {\n    return 1;\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:messaging-activemq/subsystem/src/main/java/org/wildfly/extension/messaging/activemq/PathDefinition.java:132:5:getMinOccurs:PathDefinition:getMinOccurs()",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "messaging-activemq/subsystem/src/main/java/org/wildfly/extension/messaging/activemq/deployment/JMSDestinationDefinitionInjectionSource.java",
+      "methodName": "startQueue",
+      "lineNumber": 156,
+      "comment": "* To workaround ActiveMQ\u0027s BindingRegistry limitation in {@link WildFlyBindingRegistry}\n     * that does not allow to build a BindingInfo with the ResolutionContext info, the Jakarta Messaging queue is created *without* any\n     * JNDI bindings and handle the JNDI bindings directly by getting the service\u0027s Jakarta Messaging queue.",
+      "methodSourceCode": "/**\n * To workaround ActiveMQ\u0027s BindingRegistry limitation in {@link WildFlyBindingRegistry}\n * that does not allow to build a BindingInfo with the ResolutionContext info, the Jakarta Messaging queue is created *without* any\n * JNDI bindings and handle the JNDI bindings directly by getting the service\u0027s Jakarta Messaging queue.\n */\nprivate void startQueue(final String queueName, final ServiceTarget serviceTarget, final ServiceName serverServiceName, final ServiceBuilder\u003c?\u003e serviceBuilder, final DeploymentUnit deploymentUnit, final Injector\u003cManagedReferenceFactory\u003e injector, final boolean external) {\n    final String selector \u003d properties.containsKey(SELECTOR.getName()) ? properties.get(SELECTOR.getName()) : null;\n    final boolean durable \u003d properties.containsKey(DURABLE.getName()) ? Boolean.valueOf(properties.get(DURABLE.getName())) : DURABLE.getDefaultValue().asBoolean();\n    final String managementAddress \u003d properties.containsKey(MANAGEMENT_ADDRESS.getName()) ? properties.get(MANAGEMENT_ADDRESS.getName()) : MANAGEMENT_ADDRESS.getDefaultValue().asString();\n    final String user \u003d properties.containsKey(\"management-user\") ? properties.get(\"management-user\") : null;\n    final String password \u003d properties.containsKey(\"management-password\") ? properties.get(\"management-password\") : null;\n    ModelNode destination \u003d new ModelNode();\n    destination.get(NAME).set(queueName);\n    destination.get(DURABLE.getName()).set(durable);\n    if (selector !\u003d null) {\n        destination.get(SELECTOR.getName()).set(selector);\n    }\n    destination.get(ENTRIES).add(jndiName);\n    Service\u003cQueue\u003e queueService;\n    if (external) {\n        // check @JMSDestinationDefinitions boolean property named enable-amq1-prefix for runtime queue\n        final boolean enabledAMQ1Prefix \u003d properties.containsKey(External.ENABLE_AMQ1_PREFIX.getName()) ? Boolean.valueOf(properties.get(External.ENABLE_AMQ1_PREFIX.getName())) : External.ENABLE_AMQ1_PREFIX.getDefaultValue().asBoolean();\n        ServiceName pcfName \u003d JMSServices.getPooledConnectionFactoryBaseServiceName(serverServiceName).append(resourceAdapter);\n        final ServiceName jmsQueueServiceName \u003d JMSServices.getJmsQueueBaseServiceName(serverServiceName).append(queueName);\n        queueService \u003d ExternalJMSQueueService.installRuntimeQueueService(DestinationConfiguration.Builder.getInstance().setResourceAdapter(resourceAdapter).setName(queueName).setManagementQueueAddress(managementAddress).setDestinationServiceName(jmsQueueServiceName).setDurable(durable).setSelector(selector).setManagementUsername(user).setManagementPassword(password).build(), serviceTarget, pcfName, enabledAMQ1Prefix);\n    } else {\n        queueService \u003d JMSQueueService.installService(queueName, serviceTarget, serverServiceName, selector, durable);\n    }\n    inject(serviceBuilder, injector, queueService);\n    //create the management registration\n    String serverName \u003d null;\n    final DeploymentResourceSupport deploymentResourceSupport \u003d deploymentUnit.getAttachment(Attachments.DEPLOYMENT_RESOURCE_SUPPORT);\n    PathAddress registration;\n    if (external) {\n        final PathElement dest \u003d PathElement.pathElement(EXTERNAL_JMS_QUEUE, queueName);\n        deploymentResourceSupport.getDeploymentSubsystemModel(MessagingExtension.SUBSYSTEM_NAME);\n        registration \u003d PathAddress.pathAddress(dest);\n    } else {\n        serverName \u003d getActiveMQServerName(properties);\n        final PathElement dest \u003d PathElement.pathElement(JMS_QUEUE, queueName);\n        final PathElement serverElement \u003d PathElement.pathElement(SERVER, serverName);\n        deploymentResourceSupport.getDeploymentSubModel(MessagingExtension.SUBSYSTEM_NAME, serverElement);\n        registration \u003d PathAddress.pathAddress(serverElement, dest);\n    }\n    MessagingXmlInstallDeploymentUnitProcessor.createDeploymentSubModel(registration, deploymentUnit);\n    JMSQueueConfigurationRuntimeHandler.INSTANCE.registerResource(serverName, queueName, destination);\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:messaging-activemq/subsystem/src/main/java/org/wildfly/extension/messaging/activemq/deployment/JMSDestinationDefinitionInjectionSource.java:156:5:startQueue:JMSDestinationDefinitionInjectionSource:startQueue(String, ServiceTarget, ServiceName, ServiceBuilder, DeploymentUnit, Injector, boolean)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [
+        {
+          "stage": "generation",
+          "code": "LLM_RESPONSE_INVALID",
+          "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:messaging-activemq/subsystem/src/main/java/org/wildfly/extension/messaging/activemq/deployment/JMSDestinationDefinitionInjectionSource.java:156:5:startQueue:JMSDestinationDefinitionInjectionSource:startQueue(String, ServiceTarget, ServiceName, ServiceBuilder, DeploymentUnit, Injector, boolean)",
+          "recoverable": false,
+          "message": "pipeline error recorded"
+        }
+      ],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "pojo/src/main/java/org/jboss/as/pojo/service/AbstractPojoPhase.java",
+      "methodName": "considerUninstalls",
+      "lineNumber": 205,
+      "comment": "* Consider the uninstalls.\n     * \u003cp/\u003e\n     * This method is here to be able to override\n     * the behavior after installs failed.\n     * e.g. perhaps only running uninstalls from the index.\n     * \u003cp/\u003e\n     * By default we run all uninstalls in the case\n     * at least one install failed.\n     *\n     * @param uninstalls the uninstalls\n     * @param index      current installs index",
+      "methodSourceCode": "/**\n * Consider the uninstalls.\n * \u003cp/\u003e\n * This method is here to be able to override\n * the behavior after installs failed.\n * e.g. perhaps only running uninstalls from the index.\n * \u003cp/\u003e\n * By default we run all uninstalls in the case\n * at least one install failed.\n *\n * @param uninstalls the uninstalls\n * @param index      current installs index\n */\nprotected void considerUninstalls(List\u003cJoinpoint\u003e uninstalls, int index) {\n    if (uninstalls \u003d\u003d null)\n        return;\n    for (int j \u003d Math.min(index, uninstalls.size() - 1); j \u003e\u003d 0; j--) {\n        try {\n            uninstalls.get(j).dispatch();\n        } catch (Throwable t) {\n            PojoLogger.ROOT_LOGGER.ignoreUninstallError(uninstalls.get(j), t);\n        }\n    }\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:pojo/src/main/java/org/jboss/as/pojo/service/AbstractPojoPhase.java:205:5:considerUninstalls:AbstractPojoPhase:considerUninstalls(List, int)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "testsuite/integration/basic/src/test/java/org/jboss/as/test/integration/ejb/remote/common/EJBManagementUtil.java",
+      "methodName": "getNodeName",
+      "lineNumber": 633,
+      "comment": "TODO: This method is temporary hack till we figure out the management operation to get the\njboss.node.name system property from the server http://lists.jboss.org/pipermail/jboss-as7-dev/2011-November/004434.html",
+      "methodSourceCode": "// TODO: This method is temporary hack till we figure out the management operation to get the\n// jboss.node.name system property from the server http://lists.jboss.org/pipermail/jboss-as7-dev/2011-November/004434.html\npublic static String getNodeName() {\n    // Logic copied from org.jboss.as.server.ServerEnvironment constructor\n    final Properties props \u003d System.getProperties();\n    final Map\u003cString, String\u003e env \u003d System.getenv();\n    // Calculate host and default server name\n    String hostName \u003d props.getProperty(\"jboss.host.name\");\n    String qualifiedHostName \u003d props.getProperty(\"jboss.qualified.host.name\");\n    if (qualifiedHostName \u003d\u003d null) {\n        // if host name is specified, don\u0027t pick a qualified host name that isn\u0027t related to it\n        qualifiedHostName \u003d hostName;\n        if (qualifiedHostName \u003d\u003d null) {\n            // POSIX-like OSes including Mac should have this set\n            qualifiedHostName \u003d env.get(\"HOSTNAME\");\n        }\n        if (qualifiedHostName \u003d\u003d null) {\n            // Certain versions of Windows\n            qualifiedHostName \u003d env.get(\"COMPUTERNAME\");\n        }\n        if (qualifiedHostName \u003d\u003d null) {\n            try {\n                qualifiedHostName \u003d NetworkUtils.canonize(InetAddress.getLocalHost().getHostName());\n            } catch (UnknownHostException e) {\n                qualifiedHostName \u003d null;\n            }\n        }\n        if (qualifiedHostName !\u003d null \u0026\u0026 qualifiedHostName.matches(\"^\\\\d+\\\\.\\\\d+\\\\.\\\\d+\\\\.\\\\d+$|:\")) {\n            // IP address is not acceptable\n            qualifiedHostName \u003d null;\n        }\n        if (qualifiedHostName \u003d\u003d null) {\n            // Give up\n            qualifiedHostName \u003d \"unknown-host.unknown-domain\";\n        }\n        qualifiedHostName \u003d qualifiedHostName.trim().toLowerCase(Locale.ENGLISH);\n    }\n    if (hostName \u003d\u003d null) {\n        // Use the host part of the qualified host name\n        final int idx \u003d qualifiedHostName.indexOf(\u0027.\u0027);\n        hostName \u003d idx \u003d\u003d -1 ? qualifiedHostName : qualifiedHostName.substring(0, idx);\n    }\n    // Set up the server name for management purposes\n    String serverName \u003d props.getProperty(\"jboss.server.name\");\n    if (serverName \u003d\u003d null) {\n        serverName \u003d hostName;\n    }\n    // Set up the clustering node name\n    String nodeName \u003d props.getProperty(\"jboss.node.name\");\n    if (nodeName \u003d\u003d null) {\n        nodeName \u003d serverName;\n    }\n    return nodeName;\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:testsuite/integration/basic/src/test/java/org/jboss/as/test/integration/ejb/remote/common/EJBManagementUtil.java:633:5:getNodeName:EJBManagementUtil:getNodeName()",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "testsuite/integration/basic/src/test/java/org/jboss/as/test/integration/ejb/security/AuthenticationTestCase.java",
+      "methodName": "testAuthentication_TwoBeans_ReAuth_BadPwd",
+      "lineNumber": 161,
+      "comment": "TODO - Similar test with first bean @RunAs - does it make sense to also manually switch?",
+      "methodSourceCode": "// TODO - Similar test with first bean @RunAs - does it make sense to also manually switch?\n@Test\npublic void testAuthentication_TwoBeans_ReAuth_BadPwd() throws Exception {\n    Util.switchIdentity(\"user1\", \"password1\", () -\u003e entryBean.doubleWhoAmI(\"user2\", \"wrong_password\"), true);\n}",
+      "isSatd": true,
+      "debtType": "TEST",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:testsuite/integration/basic/src/test/java/org/jboss/as/test/integration/ejb/security/AuthenticationTestCase.java:161:5:testAuthentication_TwoBeans_ReAuth_BadPwd:AuthenticationTestCase:testAuthentication_TwoBeans_ReAuth_BadPwd()",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "testsuite/integration/basic/src/test/java/org/jboss/as/test/integration/ejb/security/lifecycle/SessionBean.java",
+      "methodName": "performTests",
+      "lineNumber": 25,
+      "comment": "TODO - Why do I need to override this method.",
+      "methodSourceCode": "// TODO - Why do I need to override this method.\npublic void performTests(final String beanMethod) {\n    super.performTests(beanMethod);\n}",
+      "isSatd": true,
+      "debtType": "IMPLEMENTATION",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:testsuite/integration/basic/src/test/java/org/jboss/as/test/integration/ejb/security/lifecycle/SessionBean.java:25:5:performTests:SessionBean:performTests(String)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "testsuite/integration/basic/src/test/java/org/jboss/as/test/integration/jpa/secondlevelcache/JPA2LCTestCase.java",
+      "methodName": "testEntityCacheSameSession",
+      "lineNumber": 138,
+      "comment": "When entity caching is enabled, loading all entities at once\nwill put all entities in the cache. During the SAME session,\nwhen looking up for the ID of an entity which was returned by\nthe original query, no SQL queries should be executed.\n\nHibernate ORM 5.3 internally changed from 5.1.\nInfinispan caches are now non-transactional, meaning that the Hibernate first level cache is\nrelied on inside of transactions for caching.\nNote from Radim:\n\"\nWith (5.1) transactional caches, Infinispan was storing the fact that you\u0027ve\nstored some entities in transactional context and when you attempted to\nread it from cache, it transparently provided the updated data. With\nnon-transactional caches the *Infinispan layer* (as opposed to *2LC\nlayer*) does not do that. Instead the 2LC provider registers Jakarta Persistence\nsynchronization to execute the update if the Jakarta Persistence transaction commits.\n\"\n\nIn response to this change, the current sameSessionCheck doesn\u0027t make sense anymore,\nas the \"sameSession\" refers to the same persistence context being used for the entire test.\nThe same persistence context being used, means that the persistence context first level cache (1lc),\nis used, instead of the 2lc, which leads to emp2LCStats.getElementCountInMemory() being zero, which would\ncause this test to fail.\nSince this test, as currently written, doesn\u0027t really test the 2lc, we will ignore it.",
+      "methodSourceCode": "// When entity caching is enabled, loading all entities at once\n// will put all entities in the cache. During the SAME session,\n// when looking up for the ID of an entity which was returned by\n// the original query, no SQL queries should be executed.\n//\n// Hibernate ORM 5.3 internally changed from 5.1.\n// Infinispan caches are now non-transactional, meaning that the Hibernate first level cache is\n// relied on inside of transactions for caching.\n// Note from Radim:\n// \"\n// With (5.1) transactional caches, Infinispan was storing the fact that you\u0027ve\n// stored some entities in transactional context and when you attempted to\n// read it from cache, it transparently provided the updated data. With\n// non-transactional caches the *Infinispan layer* (as opposed to *2LC\n// layer*) does not do that. Instead the 2LC provider registers Jakarta Persistence\n// synchronization to execute the update if the Jakarta Persistence transaction commits.\n// \"\n//\n// In response to this change, the current sameSessionCheck doesn\u0027t make sense anymore,\n// as the \"sameSession\" refers to the same persistence context being used for the entire test.\n// The same persistence context being used, means that the persistence context first level cache (1lc),\n// is used, instead of the 2lc, which leads to emp2LCStats.getElementCountInMemory() being zero, which would\n// cause this test to fail.\n// Since this test, as currently written, doesn\u0027t really test the 2lc, we will ignore it.\n@Ignore\n@Test\n@InSequence(3)\npublic void testEntityCacheSameSession() throws Exception {\n    SFSB2LC sfsb \u003d lookup(\"SFSB2LC\", SFSB2LC.class);\n    String message \u003d sfsb.sameSessionCheck(CACHE_REGION_NAME);\n    if (!message.equals(\"OK\")) {\n        fail(message);\n    }\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:testsuite/integration/basic/src/test/java/org/jboss/as/test/integration/jpa/secondlevelcache/JPA2LCTestCase.java:138:5:testEntityCacheSameSession:JPA2LCTestCase:testEntityCacheSameSession()",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "testsuite/integration/basic/src/test/java/org/jboss/as/test/integration/jpa/secondlevelcache/SFSB2LC.java",
+      "methodName": "sameSessionCheck",
+      "lineNumber": 82,
+      "comment": "* Checking entity 2LC in one EntityManager session\n     * TODO: rewrite to separate transaction used to createEmployee, and either load entities outside tx or\n     * start new tx for loading entities.  Maybe simplest to have calling code, handle creating the Employees first.\n     * TODO: need conclusion to discussion about whether createEmployee should cause 2lc PutCount to be incremented,\n     *       as no data is loaded into the cache.",
+      "methodSourceCode": "/**\n * Checking entity 2LC in one EntityManager session\n * TODO: rewrite to separate transaction used to createEmployee, and either load entities outside tx or\n * start new tx for loading entities.  Maybe simplest to have calling code, handle creating the Employees first.\n * TODO: need conclusion to discussion about whether createEmployee should cause 2lc PutCount to be incremented,\n *       as no data is loaded into the cache.\n */\npublic String sameSessionCheck(String CACHE_REGION_NAME) {\n    EntityManager em \u003d emf.createEntityManager();\n    Statistics stats \u003d em.unwrap(Session.class).getSessionFactory().getStatistics();\n    stats.clear();\n    CacheRegionStatistics emp2LCStats \u003d stats.getDomainDataRegionStatistics(CACHE_REGION_NAME + \"Employee\");\n    try {\n        // add new entities and check if they are put in 2LC\n        createEmployee(em, \"Peter\", \"Ostrava\", 2);\n        createEmployee(em, \"Tom\", \"Brno\", 3);\n        assertEquals(\"There are 2 puts in the 2LC\" + generateEntityCacheStats(emp2LCStats), 2, emp2LCStats.getPutCount());\n        // loading all Employee entities should put in 2LC all Employee\n        List\u003c?\u003e empList \u003d getAllEmployeesQuery(em);\n        assertEquals(\"There are 2 entities.\", empList.size(), 2);\n        assertEquals(\"There are 2 entities in the 2LC\" + generateEntityCacheStats(emp2LCStats), 2, emp2LCStats.getElementCountInMemory());\n        // clear session\n        em.clear();\n        // entity should be loaded from 2L cache, we\u0027are expecting hit in 2L cache\n        Employee emp \u003d getEmployee(em, 2);\n        assertNotNull(\"Employee returned\", emp);\n        assertEquals(\"Expected 1 hit in cache\" + generateEntityCacheStats(emp2LCStats), 1, emp2LCStats.getHitCount());\n    } catch (AssertionError e) {\n        return e.getMessage();\n    } finally {\n        em.close();\n    }\n    return \"OK\";\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:testsuite/integration/basic/src/test/java/org/jboss/as/test/integration/jpa/secondlevelcache/SFSB2LC.java:82:5:sameSessionCheck:SFSB2LC:sameSessionCheck(String)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "testsuite/integration/clustering/src/test/java/org/jboss/as/test/clustering/cluster/ejb/remote/byteman/LastNodeToLeaveRemoteEJBTestCase.java",
+      "methodName": "createModifiedEJBClientContext",
+      "lineNumber": 296,
+      "comment": "* Create a sort-of copy of the current context with a different cluster node selector\n     *\n     * TODO: We need an easier way to create modified EJB client contexts",
+      "methodSourceCode": "/*\n     * Create a sort-of copy of the current context with a different cluster node selector\n     *\n     * TODO: We need an easier way to create modified EJB client contexts\n     */\nprivate EJBClientContext createModifiedEJBClientContext(EJBClientContext oldContext) {\n    final EJBClientContext.Builder ejbClientBuilder \u003d new EJBClientContext.Builder();\n    // transport\n    ejbClientBuilder.addTransportProvider(new RemoteTransportProvider());\n    // configured connections\n    for (EJBClientConnection connection : oldContext.getConfiguredConnections()) {\n        EJBClientConnection.Builder builder \u003d new EJBClientConnection.Builder();\n        builder.setDestination(connection.getDestination());\n        builder.setForDiscovery(connection.isForDiscovery());\n        ejbClientBuilder.addClientConnection(builder.build());\n    }\n    // cluster node selector\n    ejbClientBuilder.setClusterNodeSelector(new CustomClusterNodeSelector());\n    return ejbClientBuilder.build();\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:testsuite/integration/clustering/src/test/java/org/jboss/as/test/clustering/cluster/ejb/remote/byteman/LastNodeToLeaveRemoteEJBTestCase.java:296:5:createModifiedEJBClientContext:LastNodeToLeaveRemoteEJBTestCase:createModifiedEJBClientContext(EJBClientContext)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "testsuite/integration/clustering/src/test/java/org/jboss/as/test/clustering/single/web/SimpleServlet.java",
+      "methodName": "doPatch",
+      "lineNumber": 91,
+      "comment": "Servlet 6.0 workaround\n@Override",
+      "methodSourceCode": "// Servlet 6.0 workaround\n// @Override\nprotected void doPatch(HttpServletRequest request, HttpServletResponse response) {\n    this.doDelete(request, response);\n    this.doGet(request, response);\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:testsuite/integration/clustering/src/test/java/org/jboss/as/test/clustering/single/web/SimpleServlet.java:91:5:doPatch:SimpleServlet:doPatch(HttpServletRequest, HttpServletResponse)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "testsuite/integration/elytron-oidc-client/src/test/java/org/wildfly/test/integration/elytron/oidc/client/logout/LoginLogoutBasics.java",
+      "methodName": "readServerLogLines",
+      "lineNumber": 294,
+      "comment": "TODO prune this unused code if its non-use doesn\u0027t indicate something dropped",
+      "methodSourceCode": "// TODO prune this unused code if its non-use doesn\u0027t indicate something dropped\npublic List\u003cString\u003e readServerLogLines() {\n    String jbossHome \u003d System.getProperty(\"jboss.install.dir\");\n    String logPath \u003d String.format(\"%s%sstandalone%slog%sserver.log\", jbossHome, (jbossHome.endsWith(File.separator) || jbossHome.endsWith(\"/\")) ? \"\" : File.separator, File.separator, File.separator);\n    logPath \u003d logPath.replace(\u0027/\u0027, File.separatorChar);\n    try {\n        // UTF8 is used by default\n        return Files.readAllLines(Paths.get(logPath));\n    } catch (MalformedInputException e1) {\n        // some windows machines could accept only StandardCharsets.ISO_8859_1 encoding\n        try {\n            return Files.readAllLines(Paths.get(logPath), StandardCharsets.ISO_8859_1);\n        } catch (IOException e4) {\n            throw new RuntimeException(\"Server logs has not standard Charsets (UTF8 or ISO_8859_1)\");\n        }\n    } catch (IOException e) {\n        // server.log file is not created, it is the same as server.log is empty\n    }\n    return new ArrayList\u003c\u003e();\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:testsuite/integration/elytron-oidc-client/src/test/java/org/wildfly/test/integration/elytron/oidc/client/logout/LoginLogoutBasics.java:294:5:readServerLogLines:LoginLogoutBasics:readServerLogLines()",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "testsuite/integration/elytron/src/test/java/org/wildfly/test/integration/elytron/ejb/AuthenticationTestCase.java",
+      "methodName": "testAuthentication_TwoBeans_ReAuth_BadPwd",
+      "lineNumber": 154,
+      "comment": "TODO - Similar test with first bean @RunAs - does it make sense to also manually switch?",
+      "methodSourceCode": "// TODO - Similar test with first bean @RunAs - does it make sense to also manually switch?\n@Test\npublic void testAuthentication_TwoBeans_ReAuth_BadPwd() throws Exception {\n    Util.switchIdentity(\"user1\", \"password1\", () -\u003e entryBean.doubleWhoAmI(\"user2\", \"wrong_password\"), true);\n}",
+      "isSatd": true,
+      "debtType": "TEST",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:testsuite/integration/elytron/src/test/java/org/wildfly/test/integration/elytron/ejb/AuthenticationTestCase.java:154:5:testAuthentication_TwoBeans_ReAuth_BadPwd:AuthenticationTestCase:testAuthentication_TwoBeans_ReAuth_BadPwd()",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "testsuite/integration/manualmode-expansion/src/test/java/org/wildfly/test/manual/mvc/MVCKrazoSmokeTestCase.java",
+      "methodName": "startAndSetupContainer",
+      "lineNumber": 92,
+      "comment": "TODO migrate this to testsuite/integration/basic and drop this",
+      "methodSourceCode": "// TODO migrate this to testsuite/integration/basic and inject the http listener URL\n//    @ArquillianResource\n//    private URL url;\n// TODO migrate this to testsuite/integration/basic and drop this\n@Test\n@InSequence(-1)\npublic void startAndSetupContainer() throws Exception {\n    log.trace(\"*** starting server\");\n    containerController.start(CONTAINER);\n    ModelControllerClient client \u003d TestSuiteEnvironment.getModelControllerClient();\n    ManagementClient managementClient \u003d new ManagementClient(client, TestSuiteEnvironment.getServerAddress(), TestSuiteEnvironment.getServerPort(), \"remote+http\");\n    log.trace(\"*** will configure server now\");\n    SETUP_TASK.setup(managementClient, CONTAINER);\n    deployer.deploy(DEPLOYMENT_NAME);\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:testsuite/integration/manualmode-expansion/src/test/java/org/wildfly/test/manual/mvc/MVCKrazoSmokeTestCase.java:92:5:startAndSetupContainer:MVCKrazoSmokeTestCase:startAndSetupContainer()",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "testsuite/integration/manualmode-expansion/src/test/java/org/wildfly/test/manual/mvc/MVCKrazoSmokeTestCase.java",
+      "methodName": "stopContainer",
+      "lineNumber": 120,
+      "comment": "TODO migrate this to testsuite/integration/basic and drop this",
+      "methodSourceCode": "// TODO migrate this to testsuite/integration/basic and drop this\n@Test\n@InSequence(10)\npublic void stopContainer() throws Exception {\n    deployer.undeploy(DEPLOYMENT_NAME);\n    final ModelControllerClient client \u003d TestSuiteEnvironment.getModelControllerClient();\n    final ManagementClient managementClient \u003d new ManagementClient(client, TestSuiteEnvironment.getServerAddress(), TestSuiteEnvironment.getServerPort(), \"remote+http\");\n    log.trace(\"*** resetting test configuration\");\n    SETUP_TASK.tearDown(managementClient, CONTAINER);\n    log.trace(\"*** stopping container\");\n    containerController.stop(CONTAINER);\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:testsuite/integration/manualmode-expansion/src/test/java/org/wildfly/test/manual/mvc/MVCKrazoSmokeTestCase.java:120:5:stopContainer:MVCKrazoSmokeTestCase:stopContainer()",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "testsuite/shared/src/main/java/org/jboss/as/test/integration/management/jca/ComplexPropertiesParseUtils.java",
+      "methodName": "addExtensionProperties",
+      "lineNumber": 284,
+      "comment": "* Adds properties of Extension type to the operation\n     * TODO: not implemented jet in DMR",
+      "methodSourceCode": "/**\n * Adds properties of Extension type to the operation\n * TODO: not implemented jet in DMR\n */\npublic static void addExtensionProperties(ModelNode operation) {\n    operation.get(\"reauth-plugin-properties\", \"name\").set(\"Property1\");\n    operation.get(\"valid-connection-checker-properties\", \"name\").set(\"Property2\");\n    operation.get(\"stale-connection-checker-properties\", \"name\").set(\"Property3\");\n    operation.get(\"exception-sorter-properties\", \"name\").set(\"Property4\");\n}",
+      "isSatd": true,
+      "debtType": "IMPLEMENTATION",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:testsuite/shared/src/main/java/org/jboss/as/test/integration/management/jca/ComplexPropertiesParseUtils.java:284:5:addExtensionProperties:ComplexPropertiesParseUtils:addExtensionProperties(ModelNode)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "testsuite/shared/src/main/java/org/jboss/as/test/integration/security/common/Utils.java",
+      "methodName": "loginWithKerberos",
+      "lineNumber": 760,
+      "comment": "* Creates login context for given {@link Krb5LoginConfiguration} and credentials and calls the {@link LoginContext#login()}\n     * method on it. This method contains workaround for IBM JDK issue described in bugzilla \u003ca\n     * href\u003d\"https://bugzilla.redhat.com/show_bug.cgi?id\u003d1206177\"\u003ehttps://bugzilla.redhat.com/show_bug.cgi?id\u003d1206177\u003c/a\u003e.\n     *\n     * @param krb5Configuration\n     * @param user\n     * @param pass\n     * @return\n     * @throws LoginException",
+      "methodSourceCode": "/**\n * Creates login context for given {@link Krb5LoginConfiguration} and credentials and calls the {@link LoginContext#login()}\n * method on it. This method contains workaround for IBM JDK issue described in bugzilla \u003ca\n * href\u003d\"https://bugzilla.redhat.com/show_bug.cgi?id\u003d1206177\"\u003ehttps://bugzilla.redhat.com/show_bug.cgi?id\u003d1206177\u003c/a\u003e.\n *\n * @param krb5Configuration\n * @param user\n * @param pass\n * @return\n * @throws LoginException\n */\npublic static LoginContext loginWithKerberos(final Krb5LoginConfiguration krb5Configuration, final String user, final String pass) throws LoginException {\n    LoginContext lc \u003d new LoginContext(krb5Configuration.getName(), new UsernamePasswordCBH(user, pass.toCharArray()));\n    lc.login();\n    return lc;\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:testsuite/shared/src/main/java/org/jboss/as/test/integration/security/common/Utils.java:760:5:loginWithKerberos:Utils:loginWithKerberos(Krb5LoginConfiguration, String, String)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "testsuite/shared/src/main/java/org/jboss/as/test/integration/transactions/RecoveryExecutor.java",
+      "methodName": "runTransactionRecovery",
+      "lineNumber": 82,
+      "comment": "* \u003cp\u003e\n     * Run the transaction recovery. It expects the \u003ccode\u003etransaction-listener\u003c/code\u003e is enabled\n     * (\u003ccode\u003e\u0026sol;subsystem\u003dtransactions\u0026sol;:write-attribute(name\u003dtransaction-listener, value\u003dtrue)\u003c/code\u003e).\n     * \u003c/p\u003e\n     * \u003cp\u003e\n     * Returning from this method could not necessary means that whole recovery cycle was fully finished.\n     * To be sure that the whole recovery cycle is finished is recommended to run this method twice (one by one).\n     * After the second call it\u0027s ensured that one(!) recovery cycle is fully finished.\n     * \u003c/p\u003e\n     * \u003cp\u003e\n     * The method returns true if the recovery socket listener call succeeded and when the recovery cycle was run\n     * without any issue. An issue means there is an error on recovery processing of an XAResource -\n     * e.g. one example of such failure could be a database is down and recovery was not able to connect.\n     * \u003c/p\u003e\n     *\n     * @param socketReadTimeout  socket timeout for launching the recovery against the transaction listener socket,\n     *                           expected to be opened already\n     * @return true if recovery was successfully run without any issue, false otherwise",
+      "methodSourceCode": "/**\n * \u003cp\u003e\n * Run the transaction recovery. It expects the \u003ccode\u003etransaction-listener\u003c/code\u003e is enabled\n * (\u003ccode\u003e\u0026sol;subsystem\u003dtransactions\u0026sol;:write-attribute(name\u003dtransaction-listener, value\u003dtrue)\u003c/code\u003e).\n * \u003c/p\u003e\n * \u003cp\u003e\n * Returning from this method could not necessary means that whole recovery cycle was fully finished.\n * To be sure that the whole recovery cycle is finished is recommended to run this method twice (one by one).\n * After the second call it\u0027s ensured that one(!) recovery cycle is fully finished.\n * \u003c/p\u003e\n * \u003cp\u003e\n * The method returns true if the recovery socket listener call succeeded and when the recovery cycle was run\n * without any issue. An issue means there is an error on recovery processing of an XAResource -\n * e.g. one example of such failure could be a database is down and recovery was not able to connect.\n * \u003c/p\u003e\n *\n * @param socketReadTimeout  socket timeout for launching the recovery against the transaction listener socket,\n *                           expected to be opened already\n * @return true if recovery was successfully run without any issue, false otherwise\n */\npublic boolean runTransactionRecovery(int socketReadTimeout) {\n    try {\n        return getRecoveryDriver().synchronousVerboseScan(TimeoutUtil.adjust(socketReadTimeout), RECOVERY_SCAN_RETRY_COUNT);\n    } catch (Exception e) {\n        throw new IllegalStateException(\"Error when triggering transaction recovery synchronous scan with RecoveryDriver \" + recoveryDriverReference.get() + \", based on the management client \" + managementClient, e);\n    }\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:testsuite/shared/src/main/java/org/jboss/as/test/integration/transactions/RecoveryExecutor.java:82:5:runTransactionRecovery:RecoveryExecutor:runTransactionRecovery(int)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "testsuite/shared/src/main/java/org/jboss/as/test/shared/StaleDockerConnectionWorkaround.java",
+      "methodName": "start",
+      "lineNumber": 31,
+      "comment": "* Starts the given container, retrying if the start failed on a stale Docker API connection.\n     * Not to be used with a container whose {@link GenericContainer#start()} itself delegates to this workaround.",
+      "methodSourceCode": "/**\n * Starts the given container, retrying if the start failed on a stale Docker API connection.\n * Not to be used with a container whose {@link GenericContainer#start()} itself delegates to this workaround.\n */\npublic static void start(GenericContainer\u003c?\u003e container) {\n    start(container.getDockerImageName(), container::start);\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:testsuite/shared/src/main/java/org/jboss/as/test/shared/StaleDockerConnectionWorkaround.java:31:5:start:StaleDockerConnectionWorkaround:start(GenericContainer)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "undertow/src/main/java/org/wildfly/extension/undertow/WebServerService.java",
+      "methodName": "getPort",
+      "lineNumber": 35,
+      "comment": "todo we need to handle cases when deployments reference listeners/server/host directly",
+      "methodSourceCode": "//todo we need to handle cases when deployments reference listeners/server/host directly\n@Override\npublic int getPort(final String protocol, final boolean secure) {\n    Map\u003cString, UndertowListener\u003e listeners \u003d getListenerMap();\n    UndertowListener listener \u003d null;\n    for (Map.Entry\u003cString, UndertowListener\u003e entry : listeners.entrySet()) {\n        if (protocol.toLowerCase(Locale.ENGLISH).contains(entry.getKey())) {\n            listener \u003d entry.getValue();\n        }\n    }\n    if (listener !\u003d null \u0026\u0026 listener.getProtocol() \u003d\u003d HttpListenerService.PROTOCOL \u0026\u0026 secure) {\n        if (listeners.containsKey(HttpsListenerService.PROTOCOL)) {\n            listener \u003d listeners.get(HttpsListenerService.PROTOCOL);\n        } else {\n            UndertowLogger.ROOT_LOGGER.secureListenerNotAvailableForPort(protocol);\n        }\n    }\n    if (listener !\u003d null) {\n        SocketBinding binding \u003d listener.getSocketBinding();\n        return binding.getAbsolutePort();\n    }\n    throw UndertowLogger.ROOT_LOGGER.noPortListeningForProtocol(protocol);\n}",
+      "isSatd": true,
+      "debtType": "IMPLEMENTATION",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:undertow/src/main/java/org/wildfly/extension/undertow/WebServerService.java:35:5:getPort:WebServerService:getPort(String, boolean)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "undertow/src/main/java/org/wildfly/extension/undertow/deployment/UndertowDeploymentProcessor.java",
+      "methodName": "processManagement",
+      "lineNumber": 500,
+      "comment": "todo move to UndertowDeploymentService and use all registered servlets from Deployment instead of just one found by metadata",
+      "methodSourceCode": "//todo move to UndertowDeploymentService and use all registered servlets from Deployment instead of just one found by metadata\nvoid processManagement(final DeploymentUnit unit, JBossWebMetaData metaData) {\n    final DeploymentResourceSupport deploymentResourceSupport \u003d unit.getAttachment(Attachments.DEPLOYMENT_RESOURCE_SUPPORT);\n    for (final JBossServletMetaData servlet : metaData.getServlets()) {\n        try {\n            final String name \u003d servlet.getName();\n            final ModelNode node \u003d deploymentResourceSupport.getDeploymentSubModel(UndertowExtension.SUBSYSTEM_NAME, PathElement.pathElement(\"servlet\", name));\n            node.get(\"servlet-class\").set(servlet.getServletClass());\n            node.get(\"servlet-name\").set(servlet.getServletName());\n        } catch (Exception e) {\n            // Should a failure in creating the mgmt view also make to the deployment to fail?\n            continue;\n        }\n    }\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:undertow/src/main/java/org/wildfly/extension/undertow/deployment/UndertowDeploymentProcessor.java:500:5:processManagement:UndertowDeploymentProcessor:processManagement(DeploymentUnit, JBossWebMetaData)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "undertow/src/main/java/org/wildfly/extension/undertow/filters/FilterRefDefinition.java",
+      "methodName": "recordCapabilitiesAndRequirements",
+      "lineNumber": 110,
+      "comment": "TODO remove this when registering via SimpleResourceDefinition.Parameters.addRequirement works",
+      "methodSourceCode": "// TODO remove this when registering via SimpleResourceDefinition.Parameters.addRequirement works\n@Override\nprotected void recordCapabilitiesAndRequirements(OperationContext context, ModelNode operation, Resource resource) throws OperationFailedException {\n    super.recordCapabilitiesAndRequirements(context, operation, resource);\n    FilterCapabilities capability \u003d forHost ? FilterCapabilities.FILTER_HOST_REF_CAPABILITY : FilterCapabilities.FILTER_LOCATION_REF_CAPABILITY;\n    CapabilityReferenceRecorder filterRefRecorder \u003d new CapabilityReferenceRecorder.ResourceCapabilityReferenceRecorder(capability.getDynamicNameMapper(), capability.getName(), FilterCapabilities.FILTER_CAPABILITY.getDynamicNameMapper(), FilterCapabilities.FILTER_CAPABILITY.getName());\n    filterRefRecorder.addCapabilityRequirements(context, resource, null);\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:undertow/src/main/java/org/wildfly/extension/undertow/filters/FilterRefDefinition.java:110:9:recordCapabilitiesAndRequirements:FilterRefDefinition.FilterRefAdd:recordCapabilitiesAndRequirements(OperationContext, ModelNode, Resource)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "undertow/src/main/java/org/wildfly/extension/undertow/security/jacc/WarJACCService.java",
+      "methodName": "qualifyURLPatterns",
+      "lineNumber": 532,
+      "comment": "* Jakarta Authorization url pattern Qualified URL Pattern Names.\n     *\n     * The rules for qualifying a URL pattern are dependent on the rules for determining if one URL pattern matches another as\n     * defined in Section 3.1.3.3, Servlet URL-Pattern Matching Rules, and are described as follows: - If the pattern is a path\n     * prefix pattern, it must be qualified by every path-prefix pattern in the deployment descriptor matched by and different\n     * from the pattern being qualified. The pattern must also be qualified by every exact pattern appearing in the deployment\n     * descriptor that is matched by the pattern being qualified. - If the pattern is an extension pattern, it must be qualified\n     * by every path-prefix pattern appearing in the deployment descriptor and every exact pattern in the deployment descriptor\n     * that is matched by the pattern being qualified. - If the pattern is the default pattern, \"/\", it must be qualified by\n     * every other pattern except the default pattern appearing in the deployment descriptor. - If the pattern is an exact\n     * pattern, its qualified form must not contain any qualifying patterns.\n     *\n     * URL patterns are qualified by appending to their String representation, a colon separated representation of the list of\n     * patterns that qualify the pattern. Duplicates must not be included in the list of qualifying patterns, and any qualifying\n     * pattern matched by another qualifying pattern may5 be dropped from the list.\n     *\n     * Any pattern, qualified by a pattern that matches it, is overridden and made irrelevant (in the translation) by the\n     * qualifying pattern. Specifically, all extension patterns and the default pattern are made irrelevant by the presence of\n     * the path prefix pattern \"/*\" in a deployment descriptor. Patterns qualified by the \"/*\" pattern violate the\n     * URLPatternSpec constraints of WebResourcePermission and WebUserDataPermission names and must be rejected by the\n     * corresponding permission constructors.\n     *\n     * @param metaData - the web deployment metadata\n     * @return HashMap\u003cString, PatternInfo\u003e",
+      "methodSourceCode": "/**\n * Jakarta Authorization url pattern Qualified URL Pattern Names.\n *\n * The rules for qualifying a URL pattern are dependent on the rules for determining if one URL pattern matches another as\n * defined in Section 3.1.3.3, Servlet URL-Pattern Matching Rules, and are described as follows: - If the pattern is a path\n * prefix pattern, it must be qualified by every path-prefix pattern in the deployment descriptor matched by and different\n * from the pattern being qualified. The pattern must also be qualified by every exact pattern appearing in the deployment\n * descriptor that is matched by the pattern being qualified. - If the pattern is an extension pattern, it must be qualified\n * by every path-prefix pattern appearing in the deployment descriptor and every exact pattern in the deployment descriptor\n * that is matched by the pattern being qualified. - If the pattern is the default pattern, \"/\", it must be qualified by\n * every other pattern except the default pattern appearing in the deployment descriptor. - If the pattern is an exact\n * pattern, its qualified form must not contain any qualifying patterns.\n *\n * URL patterns are qualified by appending to their String representation, a colon separated representation of the list of\n * patterns that qualify the pattern. Duplicates must not be included in the list of qualifying patterns, and any qualifying\n * pattern matched by another qualifying pattern may5 be dropped from the list.\n *\n * Any pattern, qualified by a pattern that matches it, is overridden and made irrelevant (in the translation) by the\n * qualifying pattern. Specifically, all extension patterns and the default pattern are made irrelevant by the presence of\n * the path prefix pattern \"/*\" in a deployment descriptor. Patterns qualified by the \"/*\" pattern violate the\n * URLPatternSpec constraints of WebResourcePermission and WebUserDataPermission names and must be rejected by the\n * corresponding permission constructors.\n *\n * @param metaData - the web deployment metadata\n * @return HashMap\u003cString, PatternInfo\u003e\n */\nstatic HashMap\u003cString, PatternInfo\u003e qualifyURLPatterns(JBossWebMetaData metaData) {\n    ArrayList\u003cPatternInfo\u003e prefixList \u003d new ArrayList\u003cPatternInfo\u003e();\n    ArrayList\u003cPatternInfo\u003e extensionList \u003d new ArrayList\u003cPatternInfo\u003e();\n    ArrayList\u003cPatternInfo\u003e exactList \u003d new ArrayList\u003cPatternInfo\u003e();\n    HashMap\u003cString, PatternInfo\u003e patternMap \u003d new HashMap\u003cString, PatternInfo\u003e();\n    PatternInfo defaultInfo \u003d null;\n    List\u003cSecurityConstraintMetaData\u003e constraints \u003d metaData.getSecurityConstraints();\n    if (constraints !\u003d null) {\n        for (SecurityConstraintMetaData constraint : constraints) {\n            WebResourceCollectionsMetaData resourceCollectionsMetaData \u003d constraint.getResourceCollections();\n            if (resourceCollectionsMetaData !\u003d null) {\n                for (WebResourceCollectionMetaData resourceCollectionMetaData : resourceCollectionsMetaData) {\n                    List\u003cString\u003e urlPatterns \u003d resourceCollectionMetaData.getUrlPatterns();\n                    for (String url : urlPatterns) {\n                        int type \u003d getPatternType(url);\n                        PatternInfo info \u003d patternMap.get(url);\n                        if (info \u003d\u003d null) {\n                            info \u003d new PatternInfo(url, type);\n                            patternMap.put(url, info);\n                            switch(type) {\n                                case PREFIX:\n                                    prefixList.add(info);\n                                    break;\n                                case EXTENSION:\n                                    extensionList.add(info);\n                                    break;\n                                case EXACT:\n                                    exactList.add(info);\n                                    break;\n                                case DEFAULT:\n                                    defaultInfo \u003d info;\n                                    break;\n                            }\n                        }\n                    }\n                }\n            }\n        }\n    }\n    JBossServletsMetaData servlets \u003d metaData.getServlets();\n    List\u003cServletMappingMetaData\u003e mappings \u003d metaData.getServletMappings();\n    if (!metaData.isMetadataComplete() \u0026\u0026 servlets !\u003d null \u0026\u0026 mappings !\u003d null) {\n        Map\u003cString, List\u003cString\u003e\u003e servletMappingMap \u003d new HashMap\u003c\u003e();\n        for (ServletMappingMetaData mapping : mappings) {\n            List\u003cString\u003e list \u003d servletMappingMap.get(mapping.getServletName());\n            if (list \u003d\u003d null) {\n                servletMappingMap.put(mapping.getServletName(), list \u003d new ArrayList\u003c\u003e());\n            }\n            list.addAll(mapping.getUrlPatterns());\n        }\n        for (JBossServletMetaData servlet : servlets) {\n            ServletSecurityMetaData security \u003d servlet.getServletSecurity();\n            if (security !\u003d null) {\n                List\u003cString\u003e servletMappings \u003d servletMappingMap.get(servlet.getServletName());\n                if (servletMappings !\u003d null) {\n                    for (String url : servletMappings) {\n                        int type \u003d getPatternType(url);\n                        PatternInfo info \u003d patternMap.get(url);\n                        if (info \u003d\u003d null) {\n                            info \u003d new PatternInfo(url, type);\n                            patternMap.put(url, info);\n                            switch(type) {\n                                case PREFIX:\n                                    prefixList.add(info);\n                                    break;\n                                case EXTENSION:\n                                    extensionList.add(info);\n                                    break;\n                                case EXACT:\n                                    exactList.add(info);\n                                    break;\n                                case DEFAULT:\n                                    defaultInfo \u003d info;\n                                    break;\n                            }\n                        }\n                    }\n                }\n            }\n        }\n    }\n    // Qualify all prefix patterns\n    for (int i \u003d 0; i \u003c prefixList.size(); i++) {\n        PatternInfo info \u003d prefixList.get(i);\n        // Qualify by every other prefix pattern matching this pattern\n        for (int j \u003d 0; j \u003c prefixList.size(); j++) {\n            if (i \u003d\u003d j)\n                continue;\n            PatternInfo other \u003d prefixList.get(j);\n            if (info.matches(other))\n                info.addQualifier(other);\n        }\n        // Qualify by every exact pattern that is matched by this pattern\n        for (PatternInfo other : exactList) {\n            if (info.matches(other))\n                info.addQualifier(other);\n        }\n    }\n    // Qualify all extension patterns\n    for (PatternInfo info : extensionList) {\n        // Qualify by every path prefix pattern\n        for (PatternInfo other : prefixList) {\n            // Any extension\n            info.addQualifier(other);\n        }\n        // Qualify by every matching exact pattern\n        for (PatternInfo other : exactList) {\n            if (info.isExtensionFor(other))\n                info.addQualifier(other);\n        }\n    }\n    // Qualify the default pattern\n    if (defaultInfo \u003d\u003d null) {\n        defaultInfo \u003d new PatternInfo(\"/\", DEFAULT);\n        patternMap.put(\"/\", defaultInfo);\n    }\n    for (PatternInfo info : patternMap.values()) {\n        if (info \u003d\u003d defaultInfo)\n            continue;\n        defaultInfo.addQualifier(info);\n    }\n    return patternMap;\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:undertow/src/main/java/org/wildfly/extension/undertow/security/jacc/WarJACCService.java:532:5:qualifyURLPatterns:WarJACCService:qualifyURLPatterns(JBossWebMetaData)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "webservices/server-integration/src/main/java/org/jboss/as/webservices/deployers/WSIntegrationProcessorJAXWS_HANDLER.java",
+      "methodName": "registerConfigMapping",
+      "lineNumber": 112,
+      "comment": "TODO this could be moved to a separate DeploymentUnitProcessor operating on endpoints (together with the rest of the config resolution mechanism)",
+      "methodSourceCode": "//TODO this could be moved to a separate DeploymentUnitProcessor operating on endpoints (together with the rest of the config resolution mechanism)\nprivate void registerConfigMapping(String endpointClassName, EndpointConfig config, DeploymentUnit unit) {\n    WSEndpointConfigMapping mapping \u003d unit.getAttachment(WSAttachmentKeys.WS_ENDPOINT_CONFIG_MAPPING_KEY);\n    if (mapping \u003d\u003d null) {\n        mapping \u003d new WSEndpointConfigMapping();\n        unit.putAttachment(WSAttachmentKeys.WS_ENDPOINT_CONFIG_MAPPING_KEY, mapping);\n    }\n    mapping.registerEndpointConfig(endpointClassName, config);\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:webservices/server-integration/src/main/java/org/jboss/as/webservices/deployers/WSIntegrationProcessorJAXWS_HANDLER.java:112:5:registerConfigMapping:WSIntegrationProcessorJAXWS_HANDLER:registerConfigMapping(String, EndpointConfig, DeploymentUnit)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "webservices/server-integration/src/main/java/org/jboss/as/webservices/security/ElytronSecurityDomainContextImpl.java",
+      "methodName": "doesUserHaveRole",
+      "lineNumber": 34,
+      "comment": "TODO:deprecate this after elytron",
+      "methodSourceCode": "//TODO:deprecate this after elytron\n@Override\npublic boolean doesUserHaveRole(Principal principal, Set\u003cPrincipal\u003e principals) {\n    return true;\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:webservices/server-integration/src/main/java/org/jboss/as/webservices/security/ElytronSecurityDomainContextImpl.java:34:5:doesUserHaveRole:ElytronSecurityDomainContextImpl:doesUserHaveRole(Principal, Set)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "webservices/server-integration/src/main/java/org/jboss/as/webservices/security/ElytronSecurityDomainContextImpl.java",
+      "methodName": "getSecurityDomain",
+      "lineNumber": 39,
+      "comment": "TODO:refactor/deprecate this after elytron",
+      "methodSourceCode": "//TODO:refactor/deprecate this after elytron\n@Override\npublic String getSecurityDomain() {\n    return this.securityDomain.toString();\n}",
+      "isSatd": true,
+      "debtType": "IMPLEMENTATION",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:webservices/server-integration/src/main/java/org/jboss/as/webservices/security/ElytronSecurityDomainContextImpl.java:39:5:getSecurityDomain:ElytronSecurityDomainContextImpl:getSecurityDomain()",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "webservices/server-integration/src/main/java/org/jboss/as/webservices/security/ElytronSecurityDomainContextImpl.java",
+      "methodName": "getUserRoles",
+      "lineNumber": 50,
+      "comment": "TODO:refactor/deprecate this after elytron?",
+      "methodSourceCode": "//TODO:refactor/deprecate this after elytron?\n@Override\npublic Set\u003cPrincipal\u003e getUserRoles(Principal principal) {\n    return null;\n}",
+      "isSatd": true,
+      "debtType": "IMPLEMENTATION",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:webservices/server-integration/src/main/java/org/jboss/as/webservices/security/ElytronSecurityDomainContextImpl.java:50:5:getUserRoles:ElytronSecurityDomainContextImpl:getUserRoles(Principal)",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "weld/subsystem/src/main/java/org/jboss/as/weld/WeldSubsystemAdd.java",
+      "methodName": "checkJtsEnabled",
+      "lineNumber": 123,
+      "comment": "Synchronization objects created by iiop Jakarta Enterprise Beans beans require wrapping by JTSSychronizationWrapper to work correctly\n(WFLY-3538). This hack is used obtain jts configuration in order to avoid doing this in non-jts environments when it is\nnot necessary.",
+      "methodSourceCode": "// Synchronization objects created by iiop Jakarta Enterprise Beans beans require wrapping by JTSSychronizationWrapper to work correctly\n// (WFLY-3538). This hack is used obtain jts configuration in order to avoid doing this in non-jts environments when it is\n// not necessary.\nprivate boolean checkJtsEnabled(final OperationContext context) {\n    try {\n        final ModelNode jtsNode \u003d context.readResourceFromRoot(PathAddress.pathAddress(\"subsystem\", \"transactions\"), false).getModel().get(\"jts\");\n        return jtsNode.isDefined() ? jtsNode.asBoolean() : false;\n    } catch (NoSuchResourceException ex) {\n        return false;\n    }\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:weld/subsystem/src/main/java/org/jboss/as/weld/WeldSubsystemAdd.java:123:5:checkJtsEnabled:WeldSubsystemAdd:checkJtsEnabled(OperationContext)",
+      "contextStatus": "MATCHED",
+      "issueReferences": [
+        {
+          "value": "WFLY-3538",
+          "source": "comment"
+        }
+      ],
+      "externalTask": {
+        "provider": "jira",
+        "key": "WFLY-3538",
+        "summary": "Application does not deploy because DefaultDataSource is missing",
+        "description": "On our servers, the ExampleDs is removed from the config. In 7.2.0, this poses no problem, but in the 8.1.0.Final, when we deploy an application, the default datasource needs to be available, even if the application does not use a datasource. The error :\n{code}\nfailure description: {\"JBAS014771: Services with missing/unavailable dependencies\" \u003d\u003e [\"jboss.naming.context.java.module.jolokia.jolokia.DefaultDataSource is missing [jboss.naming.context.java.jboss.datasources.ExampleDS]\"]}\n{code}\n\nThe example above is for the deployment of the jolokia war.\n\nTo reproduce :\n* remove ExampleDS\n* deploy any application\n",
+        "acceptanceCriteria": [],
+        "labels": [],
+        "url": "https://redhat.atlassian.net/browse/WFLY-3538"
+      },
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    },
+    {
+      "filePath": "weld/subsystem/src/main/java/org/jboss/as/weld/services/bootstrap/ProxyServicesImpl.java",
+      "methodName": "supportsClassDefining",
+      "lineNumber": 200,
+      "comment": "@Override unused in Weld 3/4 and removed in Weld 5 so don\u0027t annotate it\nTODO to be removed once Weld 5 is a direct dependency of non-preview WFLY",
+      "methodSourceCode": "//@Override unused in Weld 3/4 and removed in Weld 5 so don\u0027t annotate it\n// TODO to be removed once Weld 5 is a direct dependency of non-preview WFLY\npublic boolean supportsClassDefining() {\n    return true;\n}",
+      "isSatd": true,
+      "debtType": "DESIGN",
+      "confidence": 0.4,
+      "candidateId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec:weld/subsystem/src/main/java/org/jboss/as/weld/services/bootstrap/ProxyServicesImpl.java:200:5:supportsClassDefining:ProxyServicesImpl:supportsClassDefining()",
+      "contextStatus": "NOT_FOUND",
+      "issueReferences": [],
+      "externalTask": null,
+      "classificationProvenance": {
+        "provider": "DebtHunter",
+        "strategy": "model",
+        "version": "configured"
+      },
+      "errors": [],
+      "runId": "1b3bf06c9dd44aa64173e8b423ae1883d53c4393fb2b193bc9e636b63110d3ec",
+      "repositoryUrl": "https://github.com/wildfly/wildfly",
+      "revision": "3e3aefe7872734b464be60733a7876f2d9bc8fca"
+    }
+  ]
+}

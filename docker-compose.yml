@@ -12,5 +12,6 @@ services:
     volumes:
       - debt2test-pgdata:/var/lib/postgresql/data
 
+    restart: unless-stopped
 volumes:
   debt2test-pgdata:

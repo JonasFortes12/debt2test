@@ -25,6 +25,7 @@ class DotenvEnvironmentPostProcessorTest {
         Files.writeString(directory.resolve(".env"), String.join("\n",
                 "DEBT_API_PORT=9090",
                 "DEBT_DB_URL=jdbc:postgresql://localhost:5434/debt2test",
+                "DEBT_STUDY_API_KEY=s3cret",
                 "SOME_UNRELATED_VARIABLE=should-not-leak-through",
                 ""), StandardCharsets.UTF_8);
         MockEnvironment environment = new MockEnvironment();
@@ -33,6 +34,7 @@ class DotenvEnvironmentPostProcessorTest {
 
         assertEquals("9090", environment.getProperty("DEBT_API_PORT"));
         assertEquals("jdbc:postgresql://localhost:5434/debt2test", environment.getProperty("DEBT_DB_URL"));
+        assertEquals("s3cret", environment.getProperty("DEBT_STUDY_API_KEY"));
         assertNull(environment.getProperty("SOME_UNRELATED_VARIABLE"),
                 "only the fixed, known key list may be added -- never an arbitrary .env entry");
     }

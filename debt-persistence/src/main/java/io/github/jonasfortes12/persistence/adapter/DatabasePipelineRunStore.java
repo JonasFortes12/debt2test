@@ -253,6 +253,14 @@ public class DatabasePipelineRunStore implements PipelineRunStore {
 
     @Override
     @Transactional
+    public void runTriggeredBy(String executionId, String trigger) {
+        parseExecutionId(executionId)
+                .flatMap(runs::findByIdForUpdate)
+                .ifPresent(run -> run.setTriggeredBy(trigger));
+    }
+
+    @Override
+    @Transactional
     public void runCancelled(String executionId) {
         Optional<UUID> parsed = parseExecutionId(executionId);
         if (parsed.isEmpty()) {

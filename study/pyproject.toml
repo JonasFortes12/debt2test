@@ -1,0 +1,24 @@
+[project]
+name = "debt2test-study"
+version = "0.1.0"
+description = "Reproducible data collection and analysis for the Debt2Test research questions"
+requires-python = ">=3.12"
+dependencies = [
+    "jinja2>=3.1",
+    "matplotlib>=3.9",
+    "openpyxl>=3.1",
+    "pandas>=2.2",
+    "psycopg[binary]>=3.2",
+    "pyyaml>=6.0",
+    "requests>=2.32",
+    "scipy>=1.13",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[tool.uv]
+package = false  # scripts, not an installable package
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

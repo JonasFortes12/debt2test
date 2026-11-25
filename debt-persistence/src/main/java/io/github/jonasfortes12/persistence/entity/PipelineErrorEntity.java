@@ -39,7 +39,7 @@ public class PipelineErrorEntity {
     @Column(name = "message", nullable = false, columnDefinition = "text")
     private String message;
 
-    @Column(name = "candidate_id")
+    @Column(name = "candidate_id", columnDefinition = "text")
     private String candidateId;
 
     @Column(name = "recoverable", nullable = false)

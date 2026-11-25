@@ -144,6 +144,19 @@ class PipelineRunControllerTest {
         }
 
         @Test
+        void studyRunSkipsTheAccessCodeAndRecordsTheStudyTrigger() throws Exception {
+                when(launcher.submit(any(), any())).thenReturn("3f2b8c1e-9a4d-4e7b-8f6a-2c1d5e9b7a40");
+
+                mockMvc.perform(post("/api/pipeline/runs").requestAttr("studyRun", Boolean.TRUE)
+                                .contentType(MediaType.APPLICATION_JSON).content("{\"repositoryUrl\":\"https://example.test/repo\"}"))
+                                .andExpect(status().isAccepted())
+                                .andExpect(jsonPath("$.executionId").value("3f2b8c1e-9a4d-4e7b-8f6a-2c1d5e9b7a40"));
+
+                verify(accessService, never()).startRun(any(), any(), any());
+                verify(runStore).runTriggeredBy("3f2b8c1e-9a4d-4e7b-8f6a-2c1d5e9b7a40", "study");
+        }
+
+        @Test
         void rejectedContextSourceDoesNotSpendCode() throws Exception {
                 JIRA.nextCheck = new ContextAccessCheck(ContextAccessCheck.Outcome.AUTH_REQUIRED, "auth required");
 
